@@ -38,6 +38,9 @@ data class Workout(val name: String, val segments: List<Segment>, val id: String
 
     val totalSec: Int = segments.sumOf { it.durationSec }
 
+    /** Identifies this workout across rides: the id for custom workouts, the name for built-in ones (blank id). */
+    val key: String get() = id.ifBlank { "builtin:$name" }
+
     /** Index of the segment active at [elapsedSec]. Past the end, returns the last segment. */
     fun segmentIndexAt(elapsedSec: Int): Int {
         var end = 0

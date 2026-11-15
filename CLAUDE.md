@@ -48,7 +48,8 @@ Read `MerachRide/HANDOFF.md` first. It has the current status, the discovery log
   sends a level whenever `Workout.levelAt` changes), built-in workouts, editor draft (`WorkoutDraft`),
   `WorkoutCodec` (`workouts.json`) and `WorkoutImport` (merge an imported file by id).
 - `history/`: `RideRecorder` (pure: ride stats from 1 Hz samples, handles bike counter restarts),
-  `RideTracker` (ride start/finish/save, Main thread) and `RideCodec` (`rides.json`).
+  `RideTracker` (ride start/finish/save, Main thread), `RideCodec` (`rides.json`) and `PaceTarget`
+  (speed/HR target from the last 5 rides of the same workout, matched by `Workout.key`).
 - `data/`: `MiniJson` (dependency-free JSON, so save formats are JVM-testable) and `JsonFileStore`
   (StateFlow list saved with `AtomicFile`).
 - `MerachRideApp.kt`: creates the app-wide singletons (session, workout store, ride history, ride tracker).

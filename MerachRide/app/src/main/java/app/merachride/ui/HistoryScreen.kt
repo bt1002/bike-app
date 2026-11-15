@@ -127,6 +127,7 @@ private fun RideCard(r: RideRecord, expanded: Boolean, onClick: () -> Unit, onDe
             )
             if (expanded) {
                 Detail("Moving time", formatTime(r.movingSec))
+                Detail("Speed", "avg ${r.avgSpeedKmh?.let { "%.1f".format(it) } ?: "–"} km/h")
                 Detail("Power", "avg ${r.avgPowerW ?: "–"} W · max ${r.maxPowerW ?: "–"} W")
                 Detail("Cadence", "avg ${r.avgCadenceRpm ?: "–"} rpm")
                 Detail("Heart rate", "avg ${r.avgHeartRateBpm ?: "–"} · max ${r.maxHeartRateBpm ?: "–"} bpm")

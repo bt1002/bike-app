@@ -18,6 +18,10 @@ data class RideRecord(
     val avgHeartRateBpm: Int?,
     val maxHeartRateBpm: Int?,
     val workoutName: String?,
+    /** Average speed while pedalling. Null for rides saved before this was recorded. */
+    val avgSpeedKmh: Double? = null,
+    /** [app.merachride.workout.Workout.key] of the workout ridden, used to compare rides of the same workout. */
+    val workoutKey: String? = null,
 )
 
 /**
@@ -38,12 +42,23 @@ class RideRecorder(private val id: String, private val startEpochMs: Long) {
     private var maxPower: Int? = null
     private var cadenceSum = 0.0
     private var cadenceCount = 0
+    private var speedSum = 0.0
+    private var speedCount = 0
     private var hrSum = 0L
     private var hrCount = 0
     private var maxHr: Int? = null
 
     /** Name of the workout ridden, if any (the last one that was running). */
     var workoutName: String? = null
+
+    /** Key of that workout ([app.merachride.workout.Workout.key]). */
+    var workoutKey: String? = null
+
+    /** Average speed so far while pedalling, or null before the first reading. */
+    val avgSpeedKmh: Double? get() = if (speedCount > 0) speedSum / speedCount else null
+
+    /** Average heart rate so far, or null before the first reading. */
+    val avgHeartRateBpm: Int? get() = if (hrCount > 0) (hrSum / hrCount).toInt() else null
 
     val elapsedSec: Int get() = durationSec
     val distanceM: Int get() = distance.total
@@ -60,6 +75,10 @@ class RideRecorder(private val id: String, private val startEpochMs: Long) {
             d.cadenceRpm?.let {
                 cadenceSum += it
                 cadenceCount++
+            }
+            d.speedKmh?.takeIf { it >= 0.0 }?.let {
+                speedSum += it
+                speedCount++
             }
             d.powerW?.takeIf { it >= 0 }?.let {
                 powerSum += it
@@ -84,9 +103,11 @@ class RideRecorder(private val id: String, private val startEpochMs: Long) {
         avgPowerW = if (powerCount > 0) (powerSum / powerCount).toInt() else null,
         maxPowerW = maxPower,
         avgCadenceRpm = if (cadenceCount > 0) Math.round(cadenceSum / cadenceCount).toInt() else null,
-        avgHeartRateBpm = if (hrCount > 0) (hrSum / hrCount).toInt() else null,
+        avgHeartRateBpm = avgHeartRateBpm,
         maxHeartRateBpm = maxHr,
         workoutName = workoutName,
+        avgSpeedKmh = avgSpeedKmh,
+        workoutKey = workoutKey,
     )
 
     /** Sums the increases of a running total that may restart from 0. */

@@ -50,6 +50,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontFamily
@@ -61,7 +64,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.merachride.BikeSession
 import app.merachride.ConnState
 import app.merachride.HeartRateMonitor
+import app.merachride.data.JsonFileStore
+import app.merachride.history.PaceTarget
 import app.merachride.history.RideProgress
+import app.merachride.history.RideRecord
 import app.merachride.history.RideTracker
 import app.merachride.protocol.BikeData
 import app.merachride.protocol.FtmsProtocol
@@ -80,6 +86,7 @@ fun RideScreen(
     session: BikeSession,
     tracker: RideTracker,
     heartRate: HeartRateMonitor,
+    history: JsonFileStore<RideRecord>,
     onChooseWorkout: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -91,6 +98,9 @@ fun RideScreen(
     val ride by tracker.current.collectAsStateWithLifecycle()
     val hrState by heartRate.state.collectAsStateWithLifecycle()
     val hrBpm by heartRate.bpm.collectAsStateWithLifecycle()
+    val rides by history.items.collectAsStateWithLifecycle()
+    val loaded = workout.workout
+    val paceTarget = remember(rides, loaded?.key) { loaded?.let { PaceTarget.forWorkout(rides, it) } }
     var showLog by rememberSaveable { mutableStateOf(false) }
     var showHeartRate by rememberSaveable { mutableStateOf(false) }
 
@@ -135,12 +145,14 @@ fun RideScreen(
                 Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         live(Modifier.fillMaxWidth())
+                        PacePanel(ride, data.speedKmh, hrBpm ?: data.heartRateBpm, loaded, paceTarget)
                         RideBar(ride, onFinish = tracker::finish)
                     }
                     workoutArea(Modifier.weight(1f).fillMaxHeight())
                 }
             } else {
                 live(Modifier.fillMaxWidth())
+                PacePanel(ride, data.speedKmh, hrBpm ?: data.heartRateBpm, loaded, paceTarget)
                 RideBar(ride, onFinish = tracker::finish)
                 workoutArea(Modifier.fillMaxWidth().weight(1f))
             }
@@ -407,6 +419,107 @@ private fun LevelControl(target: Int?, enabled: Boolean, onChange: (Int) -> Unit
         }
     }
 }
+
+// ------------------------------------------------------------------ pace
+
+/**
+ * Speed and heart rate: now, this ride's average so far, and the target (average of the last 5 rides
+ * of the loaded workout). The arrow compares this ride's average with the target.
+ */
+@Composable
+private fun PacePanel(
+    ride: RideProgress?,
+    speedNow: Double?,
+    hrNow: Int?,
+    workout: Workout?,
+    target: PaceTarget?,
+) {
+    // Wait for a short stretch of riding so the arrow doesn't swing on the first few samples.
+    val settled = (ride?.elapsedSec ?: 0) >= PACE_SETTLE_SEC
+    Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Row {
+                PaceHeader("", Modifier.weight(1.1f))
+                PaceHeader("Now", Modifier.weight(1f))
+                PaceHeader("Avg", Modifier.weight(1f))
+                PaceHeader("Target", Modifier.weight(1.3f))
+            }
+            PaceRow(
+                label = "km/h",
+                now = speedNow?.let { "%.1f".format(it) },
+                avg = ride?.avgSpeedKmh?.let { "%.1f".format(it) },
+                target = target?.avgSpeedKmh?.let { "%.1f".format(it) },
+                trend = if (settled) PaceTarget.trend(ride?.avgSpeedKmh, target?.avgSpeedKmh) else null,
+                colouredTrend = true,
+            )
+            PaceRow(
+                label = "bpm",
+                now = hrNow?.takeIf { it > 0 }?.toString(),
+                avg = ride?.avgHeartRateBpm?.toString(),
+                target = target?.avgHeartRateBpm?.toString(),
+                trend = if (settled) {
+                    PaceTarget.trend(ride?.avgHeartRateBpm?.toDouble(), target?.avgHeartRateBpm?.toDouble())
+                } else {
+                    null
+                },
+                // A higher heart rate isn't better or worse in itself, so its arrow stays neutral.
+                colouredTrend = false,
+            )
+            val note = when {
+                workout == null -> "Pick a workout to see a target from your past rides of it."
+                target == null -> "No past rides of this workout yet. This ride sets the first target."
+                else -> "Target: average of your last ${target.rideCount} ride${if (target.rideCount == 1) "" else "s"} of this workout."
+            }
+            Text(note, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+private fun PaceHeader(text: String, modifier: Modifier) {
+    Text(text, modifier = modifier, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+@Composable
+private fun PaceRow(
+    label: String,
+    now: String?,
+    avg: String?,
+    target: String?,
+    trend: PaceTarget.Trend?,
+    colouredTrend: Boolean,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(label, modifier = Modifier.weight(1.1f), style = MaterialTheme.typography.labelLarge)
+        Text(now ?: "–", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Text(avg ?: "–", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+        Row(Modifier.weight(1.3f), verticalAlignment = Alignment.CenterVertically) {
+            Text(target ?: "–", style = MaterialTheme.typography.titleMedium)
+            if (trend != null) {
+                val (symbol, colour, description) = when (trend) {
+                    PaceTarget.Trend.AHEAD -> Triple(" ▲", if (colouredTrend) AHEAD_GREEN else MaterialTheme.colorScheme.onSurfaceVariant, "above target")
+                    PaceTarget.Trend.BEHIND -> Triple(" ▼", if (colouredTrend) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant, "below target")
+                    PaceTarget.Trend.ON_PACE -> Triple(" =", MaterialTheme.colorScheme.onSurfaceVariant, "on target")
+                }
+                Text(
+                    symbol,
+                    color = colour,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.semantics { contentDescription = description },
+                )
+            }
+        }
+    }
+}
+
+private const val PACE_SETTLE_SEC = 30
+private val AHEAD_GREEN = Color(0xFF2E7D32)
 
 // ------------------------------------------------------------------ ride
 

@@ -16,7 +16,14 @@ import kotlinx.coroutines.launch
 import java.util.UUID
 
 /** What the Ride screen shows about the ride in progress. */
-data class RideProgress(val elapsedSec: Int, val distanceM: Int, val energyKcal: Int)
+data class RideProgress(
+    val elapsedSec: Int,
+    val distanceM: Int,
+    val energyKcal: Int,
+    /** This ride's averages so far (speed while pedalling). */
+    val avgSpeedKmh: Double?,
+    val avgHeartRateBpm: Int?,
+)
 
 /**
  * Turns bike data into saved rides.
@@ -64,7 +71,12 @@ class RideTracker(
                 } else {
                     r.tick(data)
                     val ws = session.workout.state.value
-                    if (ws.running) ws.workout?.name?.let { r.workoutName = it }
+                    if (ws.running) {
+                        ws.workout?.let {
+                            r.workoutName = it.name
+                            r.workoutKey = it.key
+                        }
+                    }
                 }
             }
             r == null -> Unit
@@ -78,7 +90,9 @@ class RideTracker(
                 }
             }
         }
-        _current.value = recorder?.let { RideProgress(it.elapsedSec, it.distanceM, it.energyKcal) }
+        _current.value = recorder?.let {
+            RideProgress(it.elapsedSec, it.distanceM, it.energyKcal, it.avgSpeedKmh, it.avgHeartRateBpm)
+        }
     }
 
     /** Ends the ride in progress and saves it if it's long enough. Call on the main thread. */
