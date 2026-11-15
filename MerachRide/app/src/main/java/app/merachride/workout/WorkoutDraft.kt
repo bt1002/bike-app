@@ -8,6 +8,8 @@ data class SegmentDraft(
     val seconds: String = "0",
     val level: Int = 5,
     val label: String = "",
+    /** Null = hold [level]; otherwise ramp from [level] to this. */
+    val endLevel: Int? = null,
 ) {
     /** Duration in seconds, or null if the fields don't make a valid duration. */
     val durationSec: Int?
@@ -26,6 +28,7 @@ data class SegmentDraft(
             seconds = (s.durationSec % 60).toString(),
             level = s.level,
             label = s.label,
+            endLevel = s.endLevel,
         )
     }
 }
@@ -54,6 +57,7 @@ data class WorkoutDraft(
                     durationSec = it.durationSec!!,
                     level = it.level.coerceIn(FtmsProtocol.MIN_LEVEL, FtmsProtocol.MAX_LEVEL),
                     label = it.label.trim(),
+                    endLevel = it.endLevel?.coerceIn(FtmsProtocol.MIN_LEVEL, FtmsProtocol.MAX_LEVEL),
                 )
             },
             id = id,
@@ -74,8 +78,16 @@ data class WorkoutDraft(
         return copy(segments = list)
     }
 
-    /** Adds a segment after the last one, copying its time and level so building intervals is quick. */
-    fun addSegment() = copy(segments = segments + (segments.lastOrNull()?.copy(label = "") ?: SegmentDraft()))
+    /**
+     * Adds a segment after the last one, copying its time so building intervals is quick.
+     * After a ramp, the new segment ramps back the other way; otherwise it holds the same level.
+     */
+    fun addSegment(): WorkoutDraft {
+        val last = segments.lastOrNull() ?: return copy(segments = listOf(SegmentDraft()))
+        val end = last.endLevel
+        val next = if (end != null) last.copy(level = end, endLevel = last.level, label = "") else last.copy(label = "")
+        return copy(segments = segments + next)
+    }
 
     companion object {
         fun from(w: Workout, id: String = w.id, name: String = w.name) =

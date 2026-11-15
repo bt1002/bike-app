@@ -48,7 +48,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -441,12 +441,12 @@ private fun ActiveWorkout(ws: WorkoutState, w: Workout, engine: WorkoutEngine) {
             Text("Workout complete. Nice work!", style = MaterialTheme.typography.titleLarge)
         } else if (seg != null) {
             Text(
-                "${ws.segmentIndex + 1}/${w.segments.size} · ${seg.label.ifBlank { "Segment" }} · level ${seg.level}",
+                "${ws.segmentIndex + 1}/${w.segments.size} · ${seg.label.ifBlank { "Segment" }} · level ${seg.levelText}",
                 style = MaterialTheme.typography.titleSmall,
             )
             Text(formatTime(ws.segmentRemainingSec), fontSize = 44.sp, fontWeight = FontWeight.Bold, lineHeight = 48.sp)
             Text(
-                ws.nextSegment?.let { "Next: ${it.label.ifBlank { "Segment" }} · level ${it.level} · ${formatTime(it.durationSec)}" }
+                ws.nextSegment?.let { "Next: ${it.label.ifBlank { "Segment" }} · level ${it.levelText} · ${formatTime(it.durationSec)}" }
                     ?: "Last segment",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -483,18 +483,24 @@ fun WorkoutProfile(w: Workout, progress: Float?, modifier: Modifier = Modifier) 
         var x = 0f
         w.segments.forEach { s ->
             val segWidth = size.width * s.durationSec / total
-            val h = size.height * s.level / FtmsProtocol.MAX_LEVEL
             val done = progress != null && (x + segWidth) / size.width <= progress
             val alpha = when {
                 progress == null -> 0.8f
                 done -> 1f
                 else -> 0.35f
             }
-            drawRect(
-                color = bar.copy(alpha = alpha),
-                topLeft = Offset(x, size.height - h),
-                size = Size((segWidth - 1f).coerceAtLeast(1f), h),
-            )
+            val hStart = size.height * s.level / FtmsProtocol.MAX_LEVEL
+            val hEnd = size.height * (s.endLevel ?: s.level) / FtmsProtocol.MAX_LEVEL
+            val right = x + (segWidth - 1f).coerceAtLeast(1f)
+            // A held level is a rectangle; a ramp is a sloped top.
+            val shape = Path().apply {
+                moveTo(x, size.height)
+                lineTo(x, size.height - hStart)
+                lineTo(right, size.height - hEnd)
+                lineTo(right, size.height)
+                close()
+            }
+            drawPath(shape, color = bar.copy(alpha = alpha))
             x += segWidth
         }
         if (progress != null) {

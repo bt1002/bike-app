@@ -1,10 +1,33 @@
 package app.merachride.workout
 
-/** One block of a workout: hold [level] for [durationSec]. */
-data class Segment(val durationSec: Int, val level: Int, val label: String = "") {
+/**
+ * One block of a workout. Holds [level] for [durationSec], or, if [endLevel] is set, ramps
+ * steadily from [level] at the start to [endLevel] at the end.
+ */
+data class Segment(
+    val durationSec: Int,
+    val level: Int,
+    val label: String = "",
+    val endLevel: Int? = null,
+) {
     init {
         require(durationSec > 0) { "durationSec must be > 0" }
     }
+
+    val isRamp: Boolean get() = endLevel != null && endLevel != level
+
+    /** Level to use [offsetSec] seconds into this segment (whole levels, as the bike only takes those). */
+    fun levelAt(offsetSec: Int): Int {
+        val end = endLevel ?: return level
+        val t = offsetSec.coerceIn(0, durationSec)
+        // Round the straight line between the two levels. e.g. 8 -> 12 over 300 s changes level at
+        // 37.5, 112.5, 187.5 and 262.5 s, so the end levels get half a step each. When an up-ramp
+        // is followed by a down-ramp, the peak then lasts as long as every other level.
+        return level + Math.round((end - level) * t.toDouble() / durationSec).toInt()
+    }
+
+    /** "8" or "8→12". */
+    val levelText: String get() = if (isRamp) "$level→$endLevel" else "$level"
 }
 
 /** [id] is blank for built-in workouts and a UUID for ones the user made. */
@@ -27,6 +50,12 @@ data class Workout(val name: String, val segments: List<Segment>, val id: String
 
     /** Seconds from workout start to the start of segment [index]. */
     fun segmentStart(index: Int): Int = segments.take(index).sumOf { it.durationSec }
+
+    /** Level the bike should be at [elapsedSec] into the workout. */
+    fun levelAt(elapsedSec: Int): Int {
+        val i = segmentIndexAt(elapsedSec)
+        return segments[i].levelAt(elapsedSec - segmentStart(i))
+    }
 }
 
 /** Snapshot of a workout in progress. */

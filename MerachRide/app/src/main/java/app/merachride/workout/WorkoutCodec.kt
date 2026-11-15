@@ -3,6 +3,7 @@ package app.merachride.workout
 import app.merachride.data.MiniJson
 import app.merachride.data.asObject
 import app.merachride.data.int
+import app.merachride.data.intOrNull
 import app.merachride.data.objects
 import app.merachride.data.str
 import app.merachride.data.strOrNull
@@ -20,7 +21,7 @@ object WorkoutCodec {
                     "id" to w.id,
                     "name" to w.name,
                     "segments" to w.segments.map { s ->
-                        mapOf("sec" to s.durationSec, "level" to s.level, "label" to s.label)
+                        mapOf("sec" to s.durationSec, "level" to s.level, "label" to s.label, "endLevel" to s.endLevel)
                     },
                 )
             },
@@ -39,6 +40,7 @@ object WorkoutCodec {
                             durationSec = s.int("sec"),
                             level = s.int("level").coerceIn(FtmsProtocol.MIN_LEVEL, FtmsProtocol.MAX_LEVEL),
                             label = s.strOrNull("label") ?: "",
+                            endLevel = s.intOrNull("endLevel")?.coerceIn(FtmsProtocol.MIN_LEVEL, FtmsProtocol.MAX_LEVEL),
                         )
                     },
                     id = w.str("id"),

@@ -12,8 +12,8 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
- * Runs a [Workout]: a 1-second ticker advances time, and whenever a new segment starts it
- * sends that segment's resistance level to the bike.
+ * Runs a [Workout]: a 1-second ticker advances time, and whenever the workout's level changes
+ * (a new segment, or the next step of a ramp) it sends that level to the bike.
  *
  * All methods must be called on the main thread; the ticker also runs there, so state
  * changes never race.
@@ -26,6 +26,9 @@ class WorkoutEngine(
     val state: StateFlow<WorkoutState> = _state.asStateFlow()
 
     private var ticker: Job? = null
+
+    /** Level the engine last sent, so a ramp only sends a command when the level actually changes. */
+    private var lastSent: Int? = null
 
     fun load(workout: Workout) {
         stopTicker()
@@ -43,7 +46,8 @@ class WorkoutEngine(
         if (current.running) return
         val s = if (current.finished) WorkoutState(workout = workout) else current
         _state.value = s.copy(running = true)
-        applyLevel(workout.segments[s.segmentIndex].level)
+        lastSent = null // Always send on start/resume, in case the level changed while paused.
+        applyLevel(workout.levelAt(s.elapsedSec))
 
         ticker = scope.launch(Dispatchers.Main) {
             while (isActive) {
@@ -55,9 +59,8 @@ class WorkoutEngine(
                     _state.value = before.copy(elapsedSec = w.totalSec, running = false, finished = true)
                     break
                 }
-                val newIndex = w.segmentIndexAt(t)
                 _state.value = before.copy(elapsedSec = t)
-                if (newIndex != before.segmentIndex) applyLevel(w.segments[newIndex].level)
+                applyLevel(w.levelAt(t))
             }
         }
     }
@@ -78,7 +81,7 @@ class WorkoutEngine(
             _state.value = s.copy(elapsedSec = w.totalSec, running = false, finished = true)
         } else {
             _state.value = s.copy(elapsedSec = w.segmentStart(next))
-            if (s.running) applyLevel(w.segments[next].level)
+            if (s.running) applyLevel(w.levelAt(w.segmentStart(next)))
         }
     }
 
@@ -88,6 +91,8 @@ class WorkoutEngine(
     }
 
     private fun applyLevel(level: Int) {
+        if (level == lastSent) return
+        lastSent = level
         scope.launch { bike.setResistanceLevel(level) }
     }
 }

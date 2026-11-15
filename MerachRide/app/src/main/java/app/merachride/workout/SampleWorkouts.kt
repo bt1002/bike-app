@@ -46,13 +46,13 @@ object SampleWorkouts {
         },
     )
 
-    /** 30 minutes alternating level 8 and level 12 every 5 minutes. */
+    /** 30 minutes ramping steadily from level 8 up to 12 over 5 minutes, then back down, three times. */
     val steps8to12 = Workout(
-        "8 / 12 Steps",
+        "8 / 12 Ramps",
         buildList {
             repeat(3) { i ->
-                add(Segment(mins(5), 8, "Steady ${i + 1}/3"))
-                add(Segment(mins(5), 12, "Push ${i + 1}/3"))
+                add(Segment(mins(5), 8, "Ramp up ${i + 1}/3", endLevel = 12))
+                add(Segment(mins(5), 12, "Ramp down ${i + 1}/3", endLevel = 8))
             }
         },
     )

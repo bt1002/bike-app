@@ -30,6 +30,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -279,28 +280,54 @@ private fun SegmentEditor(
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 NumberField(seg.minutes, "min", Modifier.width(76.dp)) { onChange(seg.copy(minutes = it)) }
                 NumberField(seg.seconds, "sec", Modifier.width(76.dp)) { onChange(seg.copy(seconds = it)) }
-                Text("Level", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(start = 8.dp))
-                FilledTonalIconButton(
-                    onClick = { onChange(seg.copy(level = seg.level - 1)) },
-                    enabled = seg.level > FtmsProtocol.MIN_LEVEL,
-                    modifier = Modifier.size(40.dp),
-                ) { Text("−", fontSize = 22.sp) }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    "${seg.level}",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.width(32.dp),
+                    if (seg.endLevel == null) "Level" else "From",
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.width(40.dp),
                 )
-                FilledTonalIconButton(
-                    onClick = { onChange(seg.copy(level = seg.level + 1)) },
-                    enabled = seg.level < FtmsProtocol.MAX_LEVEL,
-                    modifier = Modifier.size(40.dp),
-                ) { Text("+", fontSize = 22.sp) }
+                LevelStepper(seg.level) { onChange(seg.copy(level = it)) }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Switch(
+                    checked = seg.endLevel != null,
+                    onCheckedChange = { on -> onChange(seg.copy(endLevel = if (on) seg.level else null)) },
+                )
+                val end = seg.endLevel
+                if (end == null) {
+                    Text("Ramp to another level", style = MaterialTheme.typography.bodyMedium)
+                } else {
+                    Text("To", style = MaterialTheme.typography.labelLarge, modifier = Modifier.width(24.dp))
+                    LevelStepper(end) { onChange(seg.copy(endLevel = it)) }
+                }
             }
             if (seg.durationSec == null) {
                 Text("Enter a time above 0 (seconds 0–59)", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             }
         }
+    }
+}
+
+@Composable
+private fun LevelStepper(level: Int, onChange: (Int) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FilledTonalIconButton(
+            onClick = { onChange(level - 1) },
+            enabled = level > FtmsProtocol.MIN_LEVEL,
+            modifier = Modifier.size(40.dp),
+        ) { Text("−", fontSize = 22.sp) }
+        Text(
+            "$level",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.width(32.dp),
+        )
+        FilledTonalIconButton(
+            onClick = { onChange(level + 1) },
+            enabled = level < FtmsProtocol.MAX_LEVEL,
+            modifier = Modifier.size(40.dp),
+        ) { Text("+", fontSize = 22.sp) }
     }
 }
 
