@@ -153,22 +153,38 @@ class HeartRateMonitor(
 
     // ---------------------------------------------------------------- connection
 
-    /** Connects and keeps reconnecting until [disconnect] is called. */
-    fun connect(address: String, name: String?) {
+    /**
+     * Connects and keeps reconnecting until [disconnect] is called.
+     *
+     * If the monitor has never answered, a device picked by hand is given [FIRST_CONNECT_TRIES] tries
+     * (it may not be a heart rate monitor at all). With [waitForMonitor] (used by the main Connect
+     * button) it keeps looking for [WAIT_FOR_MONITOR_MS] instead, so the rider can switch on heart
+     * rate sharing on the watch after tapping Connect.
+     */
+    fun connect(address: String, name: String?, waitForMonitor: Boolean = false) {
         stopScan()
         prefs.edit().putString(KEY_ADDRESS, address).putString(KEY_NAME, name).apply()
         sessionJob?.cancel()
         sessionJob = scope.launch {
             var attempt = 0
             var everConnected = false
+            val startedAt = SystemClock.elapsedRealtime()
             while (isActive) {
                 attempt++
                 // A device that never worked is probably not a heart rate monitor (e.g. earbuds picked
-                // from the paired list), so stop instead of retrying forever. Once it has worked, keep retrying.
-                if (!everConnected && attempt > FIRST_CONNECT_TRIES) {
+                // from the paired list), or sharing is off, so don't retry forever. Once it has worked, keep retrying.
+                val giveUp = !everConnected && if (waitForMonitor) {
+                    SystemClock.elapsedRealtime() - startedAt > WAIT_FOR_MONITOR_MS
+                } else {
+                    attempt > FIRST_CONNECT_TRIES
+                }
+                if (giveUp) {
                     log("HR: no heart rate from ${name ?: address}. Is heart rate sharing on?")
                     _state.value = State.Idle
                     return@launch
+                }
+                if (waitForMonitor && !everConnected && attempt == 2) {
+                    log("HR: still looking for ${name ?: address}; turn on heart rate sharing (Connected Fitness)")
                 }
                 _state.value = State.Connecting(name, attempt)
                 log(if (attempt == 1) "HR: connecting to ${name ?: address}" else "HR: reconnect attempt $attempt")
@@ -216,5 +232,6 @@ class HeartRateMonitor(
         const val SCAN_DURATION_MS = 15_000L
         const val STALE_MS = 5_000L
         const val FIRST_CONNECT_TRIES = 3
+        const val WAIT_FOR_MONITOR_MS = 3 * 60_000L
     }
 }

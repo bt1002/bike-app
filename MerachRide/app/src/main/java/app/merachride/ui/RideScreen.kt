@@ -25,8 +25,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -126,6 +124,11 @@ fun RideScreen(
                 if (heartRate.state.value !is HeartRateMonitor.State.Idle) heartRate.disconnect()
             },
         )
+        // Warn while riding without heart rate, since rides would be saved without it.
+        if (state !is ConnState.Idle && hrState !is HeartRateMonitor.State.Connected) {
+            val hasSavedMonitor = remember(hrState) { heartRate.savedDevice != null }
+            WatchWarning(hrState, hasSavedMonitor, onClick = { showHeartRate = true })
+        }
         if (state is ConnState.Idle) {
             Column(
                 Modifier
@@ -213,30 +216,32 @@ private fun Header(
     onDisconnect: () -> Unit,
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("Merach Ride", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            val (text, color) = when (state) {
-                ConnState.Idle ->
-                    "Not connected" to MaterialTheme.colorScheme.onSurfaceVariant
-                is ConnState.Connecting ->
-                    (if (state.attempt > 1) "Reconnecting (attempt ${state.attempt})…" else "Connecting to ${state.name ?: "bike"}…") to
-                        MaterialTheme.colorScheme.tertiary
-                is ConnState.Ready ->
-                    "Connected · ${state.name ?: "bike"}" to MaterialTheme.colorScheme.primary
+            // Two status lights: green = connected, amber = connecting, red = watch missing mid-ride.
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                StatusLight(
+                    label = "Bike",
+                    light = when (state) {
+                        is ConnState.Ready -> Light.ON
+                        is ConnState.Connecting -> Light.PENDING
+                        ConnState.Idle -> Light.OFF
+                    },
+                )
+                StatusLight(
+                    label = "Watch",
+                    light = when (hrState) {
+                        is HeartRateMonitor.State.Connected -> Light.ON
+                        is HeartRateMonitor.State.Connecting -> Light.PENDING
+                        HeartRateMonitor.State.Idle -> if (state is ConnState.Idle) Light.OFF else Light.ALERT
+                    },
+                    onClick = onShowHeartRate,
+                )
             }
-            Text(text, color = color, style = MaterialTheme.typography.bodySmall)
         }
         if (onShowSimulator != null) {
             IconButton(onClick = onShowSimulator) {
                 Icon(Icons.Filled.Build, contentDescription = "Simulated bike controls")
-            }
-        }
-        IconButton(onClick = onShowHeartRate) {
-            // Filled and coloured when a monitor is connected, outlined otherwise.
-            if (hrState is HeartRateMonitor.State.Connected) {
-                Icon(Icons.Filled.Favorite, contentDescription = "Heart rate monitor (connected)", tint = MaterialTheme.colorScheme.error)
-            } else {
-                Icon(Icons.Outlined.FavoriteBorder, contentDescription = "Heart rate monitor")
             }
         }
         IconButton(onClick = onShowLog) {
@@ -247,6 +252,65 @@ private fun Header(
         }
     }
 }
+
+private enum class Light { ON, PENDING, OFF, ALERT }
+
+/** A small "● Label" pill whose dot shows a connection's state. */
+@Composable
+private fun StatusLight(label: String, light: Light, onClick: (() -> Unit)? = null) {
+    val dot = when (light) {
+        Light.ON -> AHEAD_GREEN
+        Light.PENDING -> PENDING_AMBER
+        Light.OFF -> MaterialTheme.colorScheme.outline
+        Light.ALERT -> MaterialTheme.colorScheme.error
+    }
+    val stateWord = when (light) {
+        Light.ON -> "connected"
+        Light.PENDING -> "connecting"
+        Light.OFF -> "not connected"
+        Light.ALERT -> "not connected"
+    }
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        modifier = Modifier
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .semantics(mergeDescendants = true) { contentDescription = "$label $stateWord" },
+    ) {
+        Row(
+            Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Canvas(Modifier.size(10.dp)) { drawCircle(dot) }
+            Spacer(Modifier.width(6.dp))
+            Text(label, style = MaterialTheme.typography.labelMedium)
+        }
+    }
+}
+
+/** One-line warning while the bike is connected but the watch (heart rate) isn't. Tap to open the heart rate sheet. */
+@Composable
+private fun WatchWarning(hrState: HeartRateMonitor.State, hasSavedMonitor: Boolean, onClick: () -> Unit) {
+    val (text, colour) = when {
+        hrState is HeartRateMonitor.State.Connecting ->
+            "Looking for your watch… turn on Connected Fitness on it." to MaterialTheme.colorScheme.tertiary
+        hasSavedMonitor ->
+            "Watch not connected: no heart rate. Turn on Connected Fitness, then tap here." to MaterialTheme.colorScheme.error
+        else ->
+            "No heart rate monitor. Tap here to connect your watch." to MaterialTheme.colorScheme.error
+    }
+    Text(
+        text,
+        color = colour,
+        style = MaterialTheme.typography.bodySmall,
+        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+    )
+}
+
+private val PENDING_AMBER = Color(0xFFF9A825)
 
 // ------------------------------------------------------------------ connect
 
@@ -262,7 +326,8 @@ private fun DevicePicker(session: BikeSession, heartRate: HeartRateMonitor) {
     fun connectAll(address: String, name: String?) {
         session.connect(address, name)
         val hr = lastHr ?: return
-        if (heartRate.state.value is HeartRateMonitor.State.Idle) heartRate.connect(hr.address, hr.name)
+        // Keep looking for a few minutes, so heart rate sharing can be switched on after tapping Connect.
+        if (heartRate.state.value is HeartRateMonitor.State.Idle) heartRate.connect(hr.address, hr.name, waitForMonitor = true)
     }
 
     // Whatever the user tapped while Bluetooth was off, run it once it's on.
