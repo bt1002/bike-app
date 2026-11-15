@@ -23,18 +23,16 @@ Native Android app that connects to a Merach S29 Aura exercise bike over Bluetoo
 3. Bike uses a proprietary GATT service, not FTMS.
 
 ## Next Steps
-Discovery is done (see Log), so these steps start at the first build.
-1. **Get it compiling.** Build → Make Project. Fix compile errors. Expect a few, because nothing has been compiled before.
-2. **Run the unit tests.** Use the gutter ▶ in a test file, or Gradle panel → app → Tasks → verification → `testDebugUnitTest`. Tests are in `app/src/test`: `FtmsProtocolTest`, `IndoorBikeDataParserTest`, `ResistanceScaleTest`, `WorkoutTest`.
-3. **Commit** the build fixes together with the uncommitted review fixes.
-4. **Install on the phone.** Wireless debugging avoids needing USB drivers.
-5. **Test on the bike**, checking the in-app connection log after each step:
-   - Connect, then try manual −/+ across levels 1–16.
-   - Note the "Bike reports resistance in …" log line. It answers whether `0x2AD2` reports levels or tenths. Record the result here and in CLAUDE.md, and mark it verified.
-   - Run the Quick Test workout (levels 2 → 8 → 16 → 1).
-   - Change the level with the bike's own buttons mid-workout and note what happens.
-   - Let the bike sleep, then check that the app reconnects and resumes the workout.
-6. Later ideas: app-side ERG (adjust the level to hold target watts), a workout editor, ride history and export.
+Build, install and the first bike tests are done (see Log). Remaining:
+1. **Test on the bike:**
+   - Let the bike sleep mid-workout, then check that the app reconnects and resumes the workout.
+   - Try the new UI on a real ride: Ride tab readability, a custom workout, the **8 / 12 Ramps** workout, and whether History's distance and kcal match the bike.
+2. **TODO (user request, 2026-11-14): web workout builder.** A GUI on a computer for easily building workouts, which then get onto the phone. Ideas, not decided:
+   - A single static HTML page (no server, no installs), opened in a browser, that builds workouts with the same model: segments with minutes, seconds, level 1–16, an optional ramp end level, and a label. Show a live chart.
+   - Export a file in the app's `workouts.json` format (`WorkoutCodec`: `{"version":1,"workouts":[{"id","name","segments":[{"sec","level","label","endLevel"}]}]}`).
+   - Getting it onto the phone: an **Import** button in the Workouts tab (Android file picker), plus Export from the app so workouts can be edited on the computer and sent back. A QR code is an option for single workouts.
+   - Decide whether import merges (by `id`) or replaces.
+3. Later ideas: app-side ERG (adjust the level to hold target watts), exporting ride history (CSV/FIT), and the parked one-off jump to 16 during Quick Test.
 
 ## Reference: FTMS (if supported)
 | Characteristic | UUID | Use |
