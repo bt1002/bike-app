@@ -340,10 +340,10 @@ private fun LiveStats(
         }
         LevelControl(target, levelEnabled, onChangeLevel)
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            SmallMetric("km/h", data.speedKmh?.let { "%.1f".format(it) }, Modifier.weight(1f))
+            SmallMetric(Units.SPEED, data.speedKmh?.let(Units::speed), Modifier.weight(1f))
             SmallMetric("bpm", data.heartRateBpm?.takeIf { it > 0 }?.toString(), Modifier.weight(1f))
             SmallMetric("kcal", data.totalEnergyKcal?.toString(), Modifier.weight(1f))
-            SmallMetric("km", data.totalDistanceM?.let { "%.2f".format(it / 1000.0) }, Modifier.weight(1f))
+            SmallMetric(Units.DISTANCE, data.totalDistanceM?.let(Units::distance), Modifier.weight(1f))
             SmallMetric("time", data.elapsedTimeS?.let(::formatTime), Modifier.weight(1f))
         }
     }
@@ -450,10 +450,10 @@ private fun PacePanel(
                 PaceHeader("Target", Modifier.weight(1.3f))
             }
             PaceRow(
-                label = "km/h",
-                now = speedNow?.let { "%.1f".format(it) },
-                avg = ride?.avgSpeedKmh?.let { "%.1f".format(it) },
-                target = target?.avgSpeedKmh?.let { "%.1f".format(it) },
+                label = Units.SPEED,
+                now = speedNow?.let(Units::speed),
+                avg = ride?.avgSpeedKmh?.let(Units::speed),
+                target = target?.avgSpeedKmh?.let(Units::speed),
                 trend = if (settled) PaceTarget.trend(ride?.avgSpeedKmh, target?.avgSpeedKmh) else null,
                 colouredTrend = true,
             )
@@ -535,7 +535,7 @@ private fun RideBar(ride: RideProgress?, onFinish: () -> Unit) {
             )
         } else {
             Text(
-                "Ride ${formatTime(ride.elapsedSec)} · ${"%.2f".format(ride.distanceM / 1000.0)} km · ${ride.energyKcal} kcal",
+                "Ride ${formatTime(ride.elapsedSec)} · ${Units.distance(ride.distanceM)} ${Units.DISTANCE} · ${ride.energyKcal} kcal",
                 style = MaterialTheme.typography.titleSmall,
                 modifier = Modifier.weight(1f),
             )

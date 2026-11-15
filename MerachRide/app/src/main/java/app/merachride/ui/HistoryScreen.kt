@@ -96,7 +96,7 @@ private fun Totals(rides: List<RideRecord>) {
         ) {
             Total("${rides.size}", "rides")
             Total(formatTime(rides.sumOf { it.durationSec }), "time")
-            Total("%.1f".format(rides.sumOf { it.distanceM } / 1000.0), "km")
+            Total(Units.distanceShort(rides.sumOf { it.distanceM }), Units.DISTANCE)
             Total("${rides.sumOf { it.energyKcal }}", "kcal")
         }
     }
@@ -122,12 +122,12 @@ private fun RideCard(r: RideRecord, expanded: Boolean, onClick: () -> Unit, onDe
             Text(formatDate(r.startEpochMs), style = MaterialTheme.typography.labelLarge)
             Text(r.workoutName ?: "Free ride", style = MaterialTheme.typography.titleMedium)
             Text(
-                "${formatTime(r.durationSec)} · ${"%.2f".format(r.distanceM / 1000.0)} km · ${r.energyKcal} kcal",
+                "${formatTime(r.durationSec)} · ${Units.distance(r.distanceM)} ${Units.DISTANCE} · ${r.energyKcal} kcal",
                 style = MaterialTheme.typography.bodyMedium,
             )
             if (expanded) {
                 Detail("Moving time", formatTime(r.movingSec))
-                Detail("Speed", "avg ${r.avgSpeedKmh?.let { "%.1f".format(it) } ?: "–"} km/h")
+                Detail("Speed", "avg ${r.avgSpeedKmh?.let(Units::speed) ?: "–"} ${Units.SPEED}")
                 Detail("Power", "avg ${r.avgPowerW ?: "–"} W · max ${r.maxPowerW ?: "–"} W")
                 Detail("Cadence", "avg ${r.avgCadenceRpm ?: "–"} rpm")
                 Detail("Heart rate", "avg ${r.avgHeartRateBpm ?: "–"} · max ${r.maxHeartRateBpm ?: "–"} bpm")
