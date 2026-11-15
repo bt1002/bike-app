@@ -105,14 +105,17 @@ fun RideScreen(
             hrState = hrState,
             onShowHeartRate = { showHeartRate = true },
             onShowLog = { showLog = true },
-            onDisconnect = session::disconnect,
+            onDisconnect = {
+                session.disconnect()
+                if (heartRate.state.value !is HeartRateMonitor.State.Idle) heartRate.disconnect()
+            },
         )
         if (state is ConnState.Idle) {
             Column(
                 Modifier
                     .weight(1f)
                     .verticalScroll(rememberScrollState()),
-            ) { DevicePicker(session) }
+            ) { DevicePicker(session, heartRate) }
         } else {
             val live: @Composable (Modifier) -> Unit = { m ->
                 LiveStats(
@@ -217,11 +220,19 @@ private fun Header(
 // ------------------------------------------------------------------ connect
 
 @Composable
-private fun DevicePicker(session: BikeSession) {
+private fun DevicePicker(session: BikeSession, heartRate: HeartRateMonitor) {
     val found by session.found.collectAsStateWithLifecycle()
     val scanning by session.scanning.collectAsStateWithLifecycle()
     var scannedOnce by rememberSaveable { mutableStateOf(false) }
     val last = remember { session.lastDevice }
+    val lastHr = remember { heartRate.savedDevice }
+
+    /** Connects the bike, plus the last heart rate monitor (e.g. the watch) if there is one. */
+    fun connectAll(address: String, name: String?) {
+        session.connect(address, name)
+        val hr = lastHr ?: return
+        if (heartRate.state.value is HeartRateMonitor.State.Idle) heartRate.connect(hr.address, hr.name)
+    }
 
     // Whatever the user tapped while Bluetooth was off, run it once it's on.
     var afterEnable by remember { mutableStateOf<(() -> Unit)?>(null) }
@@ -248,9 +259,21 @@ private fun DevicePicker(session: BikeSession) {
             )
             if (last != null) {
                 Button(
-                    onClick = { withBluetooth { session.connect(last.address, last.name) } },
+                    onClick = { withBluetooth { connectAll(last.address, last.name) } },
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("Connect to ${last.name ?: last.address}") }
+                ) {
+                    Text(
+                        "Connect to ${last.name ?: last.address}" +
+                            (lastHr?.let { " + ${it.name ?: "heart rate"}" } ?: ""),
+                    )
+                }
+                if (lastHr != null) {
+                    Text(
+                        "Turn on heart rate sharing on the watch first (quick settings → Connected Fitness).",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
             OutlinedButton(
                 onClick = {
@@ -275,7 +298,7 @@ private fun DevicePicker(session: BikeSession) {
                         Text("${d.address} · ${d.rssi} dBm" + if (d.advertisesFtms) " · FTMS" else "")
                     },
                     trailingContent = { Text("Connect", color = MaterialTheme.colorScheme.primary) },
-                    modifier = Modifier.clickable { session.connect(d.address, d.name) },
+                    modifier = Modifier.clickable { connectAll(d.address, d.name) },
                 )
             }
             if (scannedOnce && !scanning && found.isEmpty()) {
