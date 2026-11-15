@@ -1,5 +1,7 @@
 package app.merachride.workout
 
+import app.merachride.protocol.FtmsProtocol
+
 /**
  * One block of a workout. Holds [level] for [durationSec], or, if [endLevel] is set, ramps
  * steadily from [level] at the start to [endLevel] at the end.
@@ -59,6 +61,10 @@ data class Workout(val name: String, val segments: List<Segment>, val id: String
         val i = segmentIndexAt(elapsedSec)
         return segments[i].levelAt(elapsedSec - segmentStart(i))
     }
+
+    /** [levelAt] shifted by the rider's [offset] (the Ride tab's +/−), kept within the bike's 1..16. */
+    fun levelAt(elapsedSec: Int, offset: Int): Int =
+        (levelAt(elapsedSec) + offset).coerceIn(FtmsProtocol.MIN_LEVEL, FtmsProtocol.MAX_LEVEL)
 }
 
 /** Snapshot of a workout in progress. */
@@ -67,6 +73,8 @@ data class WorkoutState(
     val elapsedSec: Int = 0,
     val running: Boolean = false,
     val finished: Boolean = false,
+    /** Levels added to the rest of the workout by the rider (+/− on the Ride tab). */
+    val levelOffset: Int = 0,
 ) {
     val segmentIndex: Int
         get() = workout?.segmentIndexAt(elapsedSec) ?: 0

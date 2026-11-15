@@ -5,6 +5,7 @@ import app.merachride.BikeSession
 import app.merachride.ConnState
 import app.merachride.HeartRateMonitor
 import app.merachride.data.JsonFileStore
+import app.merachride.sim.TimeScale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -48,7 +49,7 @@ class RideTracker(
     init {
         scope.launch(Dispatchers.Main) {
             while (isActive) {
-                delay(1_000)
+                delay(TimeScale.tickMs) // 1 s, unless the simulator speeds time up.
                 tick()
             }
         }

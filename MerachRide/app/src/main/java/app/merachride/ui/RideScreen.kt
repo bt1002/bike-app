@@ -17,12 +17,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Info
@@ -31,6 +33,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -103,6 +106,8 @@ fun RideScreen(
     val paceTarget = remember(rides, loaded?.key) { loaded?.let { PaceTarget.forWorkout(rides, it) } }
     var showLog by rememberSaveable { mutableStateOf(false) }
     var showHeartRate by rememberSaveable { mutableStateOf(false) }
+    var showSimulator by rememberSaveable { mutableStateOf(false) }
+    val simulated by session.simulated.collectAsStateWithLifecycle()
 
     Column(
         modifier
@@ -114,6 +119,7 @@ fun RideScreen(
             state,
             hrState = hrState,
             onShowHeartRate = { showHeartRate = true },
+            onShowSimulator = if (simulated) ({ showSimulator = true }) else null,
             onShowLog = { showLog = true },
             onDisconnect = {
                 session.disconnect()
@@ -159,6 +165,12 @@ fun RideScreen(
         }
     }
 
+    if (showSimulator && simulated) {
+        ModalBottomSheet(onDismissRequest = { showSimulator = false }) {
+            SimulatorPanel(session)
+        }
+    }
+
     if (showHeartRate) {
         ModalBottomSheet(onDismissRequest = {
             heartRate.stopScan()
@@ -195,6 +207,8 @@ private fun Header(
     state: ConnState,
     hrState: HeartRateMonitor.State,
     onShowHeartRate: () -> Unit,
+    /** Non-null while connected to the simulated bike: opens its debug controls. */
+    onShowSimulator: (() -> Unit)?,
     onShowLog: () -> Unit,
     onDisconnect: () -> Unit,
 ) {
@@ -211,6 +225,11 @@ private fun Header(
                     "Connected · ${state.name ?: "bike"}" to MaterialTheme.colorScheme.primary
             }
             Text(text, color = color, style = MaterialTheme.typography.bodySmall)
+        }
+        if (onShowSimulator != null) {
+            IconButton(onClick = onShowSimulator) {
+                Icon(Icons.Filled.Build, contentDescription = "Simulated bike controls")
+            }
         }
         IconButton(onClick = onShowHeartRate) {
             // Filled and coloured when a monitor is connected, outlined otherwise.
@@ -302,6 +321,12 @@ private fun DevicePicker(session: BikeSession, heartRate: HeartRateMonitor) {
             ) { Text(if (scanning) "Stop scanning" else "Scan for bikes") }
 
             if (scanning) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+
+            if (session.simulatorAvailable) {
+                OutlinedButton(onClick = session::connectSimulated, modifier = Modifier.fillMaxWidth()) {
+                    Text("Connect to simulated bike (debug)")
+                }
+            }
 
             found.forEach { d ->
                 ListItem(
@@ -592,11 +617,13 @@ private fun WorkoutArea(ws: WorkoutState, engine: WorkoutEngine, onChoose: () ->
 
 @Composable
 private fun ActiveWorkout(ws: WorkoutState, w: Workout, engine: WorkoutEngine) {
+    // Compact so the profile chart always gets a usable height, even when the pace panel and stats
+    // leave the card little room (it used to be squeezed to nothing on a Pixel 10).
     Column(
         Modifier
             .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -607,33 +634,65 @@ private fun ActiveWorkout(ws: WorkoutState, w: Workout, engine: WorkoutEngine) {
                 overflow = TextOverflow.Ellipsis,
             )
             Text("${formatTime(ws.totalRemainingSec)} left", style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.width(8.dp))
+            // Shift the rest of the workout down or up a level. In the title row so the card stays
+            // short enough for the chart and the Start/Skip/End buttons.
+            FilledTonalIconButton(
+                onClick = { engine.bumpLevels(-1) },
+                enabled = !ws.finished,
+                modifier = Modifier.size(36.dp),
+            ) { Text("−", fontSize = 20.sp) }
+            Text(
+                if (ws.levelOffset == 0) "±0" else offsetSuffix(ws.levelOffset).trim(),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .padding(horizontal = 6.dp)
+                    .semantics { contentDescription = "Rest of workout shifted by ${ws.levelOffset} levels" },
+            )
+            FilledTonalIconButton(
+                onClick = { engine.bumpLevels(+1) },
+                enabled = !ws.finished,
+                modifier = Modifier.size(36.dp),
+            ) { Text("+", fontSize = 20.sp) }
         }
 
         val seg = ws.currentSegment
         if (ws.finished) {
             Text("Workout complete. Nice work!", style = MaterialTheme.typography.titleLarge)
         } else if (seg != null) {
-            Text(
-                "${ws.segmentIndex + 1}/${w.segments.size} · ${seg.label.ifBlank { "Segment" }} · level ${seg.levelText}",
-                style = MaterialTheme.typography.titleSmall,
-            )
-            Text(formatTime(ws.segmentRemainingSec), fontSize = 44.sp, fontWeight = FontWeight.Bold, lineHeight = 48.sp)
-            Text(
-                ws.nextSegment?.let { "Next: ${it.label.ifBlank { "Segment" }} · level ${it.levelText} · ${formatTime(it.durationSec)}" }
-                    ?: "Last segment",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            // Segment countdown on the left, what's now and what's next beside it.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(formatTime(ws.segmentRemainingSec), fontSize = 40.sp, fontWeight = FontWeight.Bold, lineHeight = 44.sp)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "${ws.segmentIndex + 1}/${w.segments.size} · ${seg.label.ifBlank { "Segment" }} · level ${seg.levelText}${offsetSuffix(ws.levelOffset)}",
+                        style = MaterialTheme.typography.titleSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        ws.nextSegment?.let { "Next: ${it.label.ifBlank { "Segment" }} · level ${it.levelText}${offsetSuffix(ws.levelOffset)} · ${formatTime(it.durationSec)}" }
+                            ?: "Last segment",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
         }
 
+        // Fixed height rather than "whatever is left", so it can't collapse to zero.
         WorkoutProfile(
             w,
             progress = ws.progress,
+            offset = ws.levelOffset,
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f),
+                .height(64.dp),
         )
-        Spacer(Modifier.height(4.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             when {
                 ws.finished -> Button(onClick = engine::start) { Text("Restart") }
@@ -646,9 +705,19 @@ private fun ActiveWorkout(ws: WorkoutState, w: Workout, engine: WorkoutEngine) {
     }
 }
 
-/** Bar chart of a workout's levels, with completed segments drawn solid and a "now" marker. */
+/** " +2" / " −1" after a level when the rider has shifted the workout, empty otherwise. */
+private fun offsetSuffix(offset: Int): String = when {
+    offset > 0 -> " +$offset"
+    offset < 0 -> " −${-offset}"
+    else -> ""
+}
+
+/**
+ * Bar chart of a workout's levels, with completed segments drawn solid and a "now" marker.
+ * Segments not yet finished are drawn shifted by [offset] (the rider's +/−), as the bike will get them.
+ */
 @Composable
-fun WorkoutProfile(w: Workout, progress: Float?, modifier: Modifier = Modifier) {
+fun WorkoutProfile(w: Workout, progress: Float?, modifier: Modifier = Modifier, offset: Int = 0) {
     val bar = MaterialTheme.colorScheme.primary
     val marker = MaterialTheme.colorScheme.onSurface
     Canvas(modifier) {
@@ -662,8 +731,10 @@ fun WorkoutProfile(w: Workout, progress: Float?, modifier: Modifier = Modifier) 
                 done -> 1f
                 else -> 0.35f
             }
-            val hStart = size.height * s.level / FtmsProtocol.MAX_LEVEL
-            val hEnd = size.height * (s.endLevel ?: s.level) / FtmsProtocol.MAX_LEVEL
+            val shift = if (done) 0 else offset
+            fun h(level: Int) = size.height * (level + shift).coerceIn(FtmsProtocol.MIN_LEVEL, FtmsProtocol.MAX_LEVEL) / FtmsProtocol.MAX_LEVEL
+            val hStart = h(s.level)
+            val hEnd = h(s.endLevel ?: s.level)
             val right = x + (segWidth - 1f).coerceAtLeast(1f)
             // A held level is a rectangle; a ramp is a sloped top.
             val shape = Path().apply {

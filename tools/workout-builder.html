@@ -244,6 +244,8 @@ const TEMPLATES = [
       ...[6, 8, 10, 12, 14, 12, 10, 8, 6].map(l => seg(120, l, "Climb")), seg(240, 3, "Cool-down")] },
   { name: "8 / 12 Ramps", segments: [0, 1, 2].flatMap(i =>
       [seg(300, 8, `Ramp up ${i + 1}/3`, 12), seg(300, 12, `Ramp down ${i + 1}/3`, 8)]) },
+  { name: "Stairs", segments: [0, 1, 2].flatMap(() =>
+      [seg(300, 6, "Up", 12), seg(300, 12, "Down", 6)]) },
 ];
 
 // ---- State ----
