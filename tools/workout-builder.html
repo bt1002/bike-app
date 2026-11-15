@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MerachRide workout builder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  color-scheme: light;
+  --bg: #e6ebef;
+  --panel: #fbfcfd;
+  --ink: #1d2833;
+  --ink-soft: #566472;
+  --rule: #c8d1d9;
+  --field: #ffffff;
+  --accent: #1f6f86;
+  --accent-ink: #ffffff;
+  --danger: #b3263e;
+  --sel: rgba(31, 111, 134, 0.12);
+  --grid: rgba(29, 40, 51, 0.12);
+  --body: "Barlow", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --display: "Barlow Semi Condensed", "Arial Narrow", system-ui, sans-serif;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #131a21;
+    --panel: #1b242d;
+    --ink: #e2e8ee;
+    --ink-soft: #9aa8b5;
+    --rule: #33404c;
+    --field: #141c23;
+    --accent: #4fb3cc;
+    --accent-ink: #0d1a20;
+    --danger: #ff6f86;
+    --sel: rgba(79, 179, 204, 0.16);
+    --grid: rgba(226, 232, 238, 0.12);
+  }
+}
+*, *::before, *::after { box-sizing: inherit; }
+html, body { margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.45 var(--body);
+}
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+header {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 14px 20px; border-bottom: 1px solid var(--rule); background: var(--panel);
+}
+header h1 {
+  font: 700 22px/1 var(--display); margin: 0; letter-spacing: 0.01em; margin-right: auto;
+}
+header h1 small { font: 500 15px var(--body); color: var(--ink-soft); margin-left: 8px; }
+
+.btn {
+  border: 1px solid var(--rule); background: var(--field); border-radius: 6px;
+  padding: 7px 14px; cursor: pointer; white-space: nowrap;
+}
+.btn:hover { border-color: var(--ink-soft); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+.btn.danger { color: var(--danger); }
+.icon {
+  border: 0; background: none; cursor: pointer; padding: 4px 7px; border-radius: 4px;
+  color: var(--ink-soft); font-size: 15px; line-height: 1;
+}
+.icon:hover { background: var(--sel); color: var(--ink); }
+.icon:disabled { opacity: 0.3; cursor: default; background: none; }
+
+main {
+  display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 0;
+  min-height: calc(100vh - 60px);
+}
+aside {
+  border-right: 1px solid var(--rule); padding: 16px; background: var(--panel);
+}
+aside h2, .editor h2 {
+  font: 600 17px var(--display); margin: 0 0 10px; color: var(--ink-soft);
+}
+.lib { list-style: none; margin: 0 0 14px; padding: 0; }
+.lib li button {
+  width: 100%; text-align: left; border: 0; background: none; cursor: pointer;
+  padding: 8px 10px; border-radius: 6px; display: flex; justify-content: space-between; gap: 8px;
+}
+.lib li button:hover { background: var(--sel); }
+.lib li button[aria-current="true"] { background: var(--sel); font-weight: 600; box-shadow: inset 3px 0 0 var(--accent); }
+.lib .t { color: var(--ink-soft); font-family: var(--display); font-weight: 500; }
+.lib-empty { color: var(--ink-soft); font-size: 14px; margin: 0 0 14px; }
+.newrow { display: grid; gap: 8px; }
+.newrow select { padding: 7px; border: 1px solid var(--rule); border-radius: 6px; background: var(--field); }
+
+.editor { padding: 20px 24px 40px; max-width: 1100px; min-width: 0; }
+.titlebar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+.titlebar input {
+  flex: 1 1 260px; font: 700 30px/1.1 var(--display); border: 0; border-bottom: 2px solid transparent;
+  background: none; padding: 2px 0;
+}
+.titlebar input:hover { border-bottom-color: var(--rule); }
+.titlebar input:focus { border-bottom-color: var(--accent); outline: none; }
+
+.stats { display: flex; gap: 28px; flex-wrap: wrap; margin: 0 0 10px; }
+.stats div { display: flex; flex-direction: column; }
+.stats b { font: 700 26px/1 var(--display); }
+.stats span { font-size: 13px; color: var(--ink-soft); }
+
+.chart {
+  background: var(--panel); border: 1px solid var(--rule); border-radius: 10px;
+  padding: 12px 12px 6px; margin-bottom: 20px;
+}
+.chart svg { display: block; width: 100%; height: auto; }
+.chart .axis { fill: var(--ink-soft); font: 500 12px var(--display); }
+.chart .gl { stroke: var(--grid); stroke-width: 1; }
+.chart rect.run { cursor: pointer; }
+.chart rect.selband { fill: var(--sel); }
+.chart .hint { font-size: 13px; color: var(--ink-soft); margin: 4px 4px 2px; }
+
+.segs { width: 100%; border-collapse: collapse; }
+.segs th {
+  text-align: left; font: 600 14px var(--display); color: var(--ink-soft);
+  padding: 0 6px 6px; border-bottom: 1px solid var(--rule);
+}
+.segs td { padding: 6px; border-bottom: 1px solid var(--rule); vertical-align: middle; }
+.segs tr.selected td { background: var(--sel); }
+.segs tr.bad td { box-shadow: inset 0 -2px 0 var(--danger); }
+.segs .swatch { width: 10px; height: 26px; border-radius: 3px; display: inline-block; vertical-align: middle; }
+.segs input[type="text"], .segs input[type="number"] {
+  border: 1px solid var(--rule); background: var(--field); border-radius: 5px; padding: 5px 7px; width: 100%;
+}
+.segs input[type="number"] { width: 4.2em; font-family: var(--display); font-weight: 600; font-size: 17px; }
+.segs input:disabled { opacity: 0.35; }
+.segs .dur { display: flex; align-items: center; gap: 3px; white-space: nowrap; }
+.segs .ramp { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.segs .acts { white-space: nowrap; text-align: right; }
+.err { color: var(--danger); font-size: 13px; }
+
+.addbar { display: flex; gap: 8px; flex-wrap: wrap; margin: 14px 0; }
+details.reps {
+  border: 1px solid var(--rule); border-radius: 8px; background: var(--panel); padding: 10px 14px; margin-top: 6px;
+}
+details.reps summary { cursor: pointer; font-weight: 600; }
+.repgrid {
+  display: grid; grid-template-columns: auto repeat(4, minmax(0, auto)); gap: 8px 10px; align-items: center;
+  margin-top: 12px; justify-content: start;
+}
+.repgrid input { border: 1px solid var(--rule); background: var(--field); border-radius: 5px; padding: 5px 7px; width: 5.5em; }
+.repgrid input.lbl { width: 9em; }
+.repgrid .h { font-size: 13px; color: var(--ink-soft); }
+
+.empty-editor { padding: 60px 24px; color: var(--ink-soft); }
+.empty-editor h2 { font: 700 26px var(--display); color: var(--ink); margin: 0 0 8px; }
+
+#toast {
+  position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+  background: var(--ink); color: var(--panel); padding: 10px 16px; border-radius: 8px;
+  font-size: 15px; max-width: min(560px, 90vw); opacity: 0; pointer-events: none; transition: opacity .2s;
+}
+#toast.show { opacity: 1; }
+#toast.bad { background: var(--danger); color: #fff; }
+
+@media (max-width: 760px) {
+  main { grid-template-columns: minmax(0, 1fr); }
+  aside { border-right: 0; border-bottom: 1px solid var(--rule); }
+  .editor { padding: 16px; }
+  .segs thead { display: none; }
+  .segs, .segs tbody, .segs tr, .segs td { display: block; }
+  .segs tr {
+    display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; padding: 10px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .segs td { border: 0; padding: 0; min-width: 0; }
+  .segs td.sw { grid-row: span 4; }
+  .segs .acts { text-align: left; }
+}
+@media (prefers-reduced-motion: reduce) { #toast { transition: none; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Workout builder <small>for MerachRide</small></h1>
+  <button class="btn" id="importBtn" type="button">Import workouts.json</button>
+  <button class="btn primary" id="exportBtn" type="button">Export workouts.json</button>
+  <input type="file" id="fileInput" accept=".json,application/json" hidden>
+</header>
+<main>
+  <aside>
+    <h2>Your workouts</h2>
+    <ul class="lib" id="lib"></ul>
+    <p class="lib-empty" id="libEmpty" hidden>No workouts yet. Start a new one or import a file from the app.</p>
+    <div class="newrow">
+      <button class="btn" id="newBtn" type="button">New workout</button>
+      <select id="tplSelect" aria-label="Start from a built-in workout">
+        <option value="">Copy a built-in workout…</option>
+      </select>
+    </div>
+  </aside>
+  <section class="editor" id="editor"></section>
+</main>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+"use strict";
+
+// ---- Model: mirrors app/merachride/workout/Workout.kt and WorkoutCodec.kt ----
+const MIN_LEVEL = 1, MAX_LEVEL = 16;
+const STORE_KEY = "merachride.builder.v1";
+
+const clampLevel = n => Math.min(MAX_LEVEL, Math.max(MIN_LEVEL, Math.round(Number(n) || MIN_LEVEL)));
+
+/** Same as Segment.levelAt in Workout.kt (Kotlin Math.round and JS Math.round both round .5 up). */
+function segLevelAt(s, t) {
+  if (s.endLevel == null) return s.level;
+  const tt = Math.min(s.sec, Math.max(0, t));
+  return s.level + Math.round((s.endLevel - s.level) * tt / s.sec);
+}
+
+function uuid() {
+  if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40; b[8] = (b[8] & 0x3f) | 0x80;
+  const h = [...b].map(x => x.toString(16).padStart(2, "0")).join("");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
+const seg = (sec, level, label = "", endLevel = null) => ({ sec, level, label, endLevel });
+const totalSec = w => w.segments.reduce((a, s) => a + s.sec, 0);
+
+/** Built-in workouts from SampleWorkouts.kt, offered as starting points. */
+const TEMPLATES = [
+  { name: "Quick Test", segments: [seg(30, 2, "Easy"), seg(30, 8, "Medium"), seg(30, 16, "Max"), seg(30, 1, "Recover")] },
+  { name: "Easy Spin", segments: [seg(300, 3, "Warm-up"), seg(600, 5, "Steady"), seg(300, 3, "Cool-down")] },
+  { name: "1:1 Intervals", segments: [seg(300, 4, "Warm-up"),
+      ...Array.from({ length: 7 }, (_, i) => [seg(60, 12, `Hard ${i + 1}/7`), seg(60, 5, "Easy")]).flat(),
+      seg(300, 3, "Cool-down")] },
+  { name: "Hill Pyramid", segments: [seg(240, 4, "Warm-up"),
+      ...[6, 8, 10, 12, 14, 12, 10, 8, 6].map(l => seg(120, l, "Climb")), seg(240, 3, "Cool-down")] },
+  { name: "8 / 12 Ramps", segments: [0, 1, 2].flatMap(i =>
+      [seg(300, 8, `Ramp up ${i + 1}/3`, 12), seg(300, 12, `Ramp down ${i + 1}/3`, 8)]) },
+];
+
+// ---- State ----
+let state = { workouts: [], selectedId: null, selSeg: -1 };
+
+function save() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify({ workouts: state.workouts, selectedId: state.selectedId })); }
+  catch (e) { /* storage unavailable; the page still works for this session */ }
+}
+function load() {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (!raw) return;
+    const d = JSON.parse(raw);
+    state.workouts = decodeWorkouts(d).workouts;
+    state.selectedId = state.workouts.some(w => w.id === d.selectedId) ? d.selectedId : (state.workouts[0]?.id ?? null);
+  } catch (e) { /* ignore a damaged or missing store */ }
+}
+
+const current = () => state.workouts.find(w => w.id === state.selectedId) || null;
+
+// ---- Codec ----
+function encodeWorkouts(list) {
+  return JSON.stringify({
+    version: 1,
+    workouts: list.map(w => ({
+      id: w.id,
+      name: w.name,
+      segments: w.segments.map(s => ({ sec: s.sec, level: s.level, label: s.label, endLevel: s.endLevel })),
+    })),
+  }, null, 2);
+}
+
+/** Like WorkoutCodec.decode: a damaged entry is skipped instead of failing the whole file. */
+function decodeWorkouts(root) {
+  const out = []; let skipped = 0;
+  const list = root && Array.isArray(root.workouts) ? root.workouts : null;
+  if (!list) throw new Error("This file has no \"workouts\" list. Export workouts.json from the app or from this page.");
+  for (const w of list) {
+    try {
+      if (typeof w.name !== "string" || !Array.isArray(w.segments) || w.segments.length === 0) throw 0;
+      const segments = w.segments.map(s => {
+        const sec = Math.trunc(Number(s.sec));
+        if (!(sec > 0) || typeof s.level !== "number") throw 0;
+        const end = typeof s.endLevel === "number" ? clampLevel(s.endLevel) : null;
+        return seg(sec, clampLevel(s.level), typeof s.label === "string" ? s.label : "", end);
+      });
+      const id = typeof w.id === "string" && w.id ? w.id : uuid();
+      out.push({ id, name: w.name, segments });
+    } catch (e) { skipped++; }
+  }
+  return { workouts: out, skipped };
+}
+
+function problems(w) {
+  const p = [];
+  if (!w.name.trim()) p.push("needs a name");
+  if (w.segments.length === 0) p.push("needs at least one segment");
+  w.segments.forEach((s, i) => { if (!(s.sec > 0)) p.push(`segment ${i + 1} needs at least 1 second`); });
+  return p;
+}
+
+// ---- Helpers ----
+function levelColor(level) {
+  const t = (level - MIN_LEVEL) / (MAX_LEVEL - MIN_LEVEL);
+  const hue = 188 + t * 150;            // teal → blue → violet → rose
+  const light = 50 - t * 6;
+  return `hsl(${hue.toFixed(0)} 62% ${light.toFixed(0)}%)`;
+}
+function fmtTime(sec) {
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+  return h ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}` : `${m}:${String(s).padStart(2, "0")}`;
+}
+function el(tag, attrs = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") e.className = v;
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+    else if (v === true) e.setAttribute(k, "");
+    else if (v !== false && v != null) e.setAttribute(k, v);
+  }
+  for (const k of kids) if (k != null) e.append(k);
+  return e;
+}
+let toastTimer;
+function toast(msg, bad = false) {
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.className = "show" + (bad ? " bad" : "");
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.className = ""), bad ? 5000 : 2600);
+}
+function commit(rerenderAll = false) {
+  save();
+  if (rerenderAll) render(); else { renderLibrary(); renderStats(); renderChart(); }
+}
+
+// ---- Rendering ----
+function render() { renderLibrary(); renderEditor(); }
+
+function renderLibrary() {
+  const lib = document.getElementById("lib");
+  lib.replaceChildren(...state.workouts.map(w =>
+    el("li", {}, el("button", {
+      type: "button", "aria-current": String(w.id === state.selectedId),
+      onclick: () => { state.selectedId = w.id; state.selSeg = -1; save(); render(); },
+    }, el("span", {}, w.name.trim() || "Untitled"), el("span", { class: "t" }, fmtTime(totalSec(w)))))));
+  document.getElementById("libEmpty").hidden = state.workouts.length > 0;
+}
+
+function renderEditor() {
+  const ed = document.getElementById("editor");
+  const w = current();
+  if (!w) {
+    ed.replaceChildren(el("div", { class: "empty-editor" },
+      el("h2", {}, "Build a workout"),
+      el("p", {}, "Start a new workout, copy one of the built-in ones, or import the workouts.json you exported from the app. Each segment holds a level from 1 to 16, or ramps from one level to another.")));
+    return;
+  }
+  const name = el("input", {
+    type: "text", value: w.name, "aria-label": "Workout name", placeholder: "Workout name",
+    oninput: e => { w.name = e.target.value; commit(); },
+  });
+  const titlebar = el("div", { class: "titlebar" }, name,
+    el("button", { class: "btn", type: "button", onclick: duplicateWorkout }, "Duplicate"),
+    el("button", { class: "btn danger", type: "button", onclick: deleteWorkout }, "Delete"));
+
+  const chart = el("div", { class: "chart" }, el("div", { id: "chartSvg" }),
+    el("p", { class: "hint" }, "Tap a block to edit its segment. The bike only takes whole levels, so ramps step one level at a time, as in the app."));
+
+  const table = el("table", { class: "segs" },
+    el("thead", {}, el("tr", {},
+      el("th", {}, ""), el("th", {}, "Label"), el("th", {}, "Duration"), el("th", {}, "Level"),
+      el("th", {}, "Ramp to"), el("th", {}, ""))),
+    el("tbody", { id: "segBody" }));
+
+  const addbar = el("div", { class: "addbar" },
+    el("button", { class: "btn", type: "button", onclick: () => addSegment() }, "Add segment"),
+    el("button", { class: "btn", type: "button", onclick: () => addSegment(true) }, "Add ramp"));
+
+  ed.replaceChildren(titlebar, el("div", { class: "stats", id: "stats" }), chart, table, addbar, repsPanel());
+  renderStats(); renderChart(); renderRows();
+}
+
+function renderStats() {
+  const w = current(); const box = document.getElementById("stats");
+  if (!w || !box) return;
+  const tot = totalSec(w);
+  let weighted = 0, peak = 0;
+  w.segments.forEach(s => { for (let t = 0; t < s.sec; t++) { const l = segLevelAt(s, t); weighted += l; peak = Math.max(peak, l); } });
+  const avg = tot ? (weighted / tot).toFixed(1) : "–";
+  const stat = (v, l) => el("div", {}, el("b", {}, v), el("span", {}, l));
+  box.replaceChildren(stat(fmtTime(tot), "Total time"), stat(String(w.segments.length), "Segments"),
+    stat(avg, "Average level"), stat(peak ? String(peak) : "–", "Peak level"));
+}
+
+function renderChart() {
+  const w = current(); const host = document.getElementById("chartSvg");
+  if (!w || !host) return;
+  const W = 1000, H = 250, L = 34, R = 8, T = 8, B = 26;
+  const pw = W - L - R, ph = H - T - B;
+  const tot = Math.max(1, totalSec(w));
+  const x = s => L + (s / tot) * pw;
+  const y = lv => T + ph - (lv / MAX_LEVEL) * ph;
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.setAttribute("role", "img");
+  svg.setAttribute("aria-label", `Resistance profile, ${fmtTime(tot)} long`);
+  const add = (tag, a, text) => {
+    const n = document.createElementNS(NS, tag);
+    for (const [k, v] of Object.entries(a)) n.setAttribute(k, v);
+    if (text != null) n.textContent = text;
+    svg.appendChild(n); return n;
+  };
+  [4, 8, 12, 16].forEach(lv => {
+    add("line", { class: "gl", x1: L, x2: W - R, y1: y(lv), y2: y(lv) });
+    add("text", { class: "axis", x: L - 8, y: y(lv) + 4, "text-anchor": "end" }, String(lv));
+  });
+  // minute ticks: pick a step that gives about 6–12 labels
+  const steps = [30, 60, 120, 300, 600, 900, 1800, 3600];
+  const step = steps.find(s => tot / s <= 12) || 3600;
+  for (let s = 0; s <= tot; s += step)
+    add("text", { class: "axis", x: x(s), y: H - 6, "text-anchor": s === 0 ? "start" : (tot - s < step / 2 ? "end" : "middle") }, fmtTime(s));
+
+  let start = 0;
+  w.segments.forEach((s, i) => {
+    if (i === state.selSeg && s.sec > 0)
+      add("rect", { class: "selband", x: x(start), y: T, width: Math.max(1, x(start + s.sec) - x(start)), height: ph });
+    // group seconds of equal level into runs
+    let runStart = 0, runLevel = segLevelAt(s, 0);
+    for (let t = 1; t <= s.sec; t++) {
+      const lv = t < s.sec ? segLevelAt(s, t) : null;
+      if (lv !== runLevel) {
+        const r = add("rect", {
+          class: "run", x: x(start + runStart), y: y(runLevel),
+          width: Math.max(0.5, x(start + t) - x(start + runStart)) , height: y(0) - y(runLevel),
+          fill: levelColor(runLevel), "data-seg": i,
+        });
+        const t2 = document.createElementNS(NS, "title");
+        t2.textContent = `${s.label || "Segment " + (i + 1)}: level ${runLevel}, ${fmtTime(start + runStart)}–${fmtTime(start + t)}`;
+        r.appendChild(t2);
+        runStart = t; runLevel = lv;
+      }
+    }
+    start += s.sec;
+  });
+  // segment boundaries
+  start = 0;
+  w.segments.forEach((s, i) => {
+    start += s.sec;
+    if (i < w.segments.length - 1) add("line", { x1: x(start), x2: x(start), y1: T, y2: T + ph, stroke: "var(--panel)", "stroke-width": 1.5 });
+  });
+  svg.addEventListener("click", e => {
+    const i = e.target.getAttribute && e.target.getAttribute("data-seg");
+    if (i == null) return;
+    selectSeg(Number(i), true);
+  });
+  host.replaceChildren(svg);
+}
+
+function selectSeg(i, focus = false) {
+  state.selSeg = i;
+  renderChart();
+  document.querySelectorAll("#segBody tr").forEach((tr, j) => tr.classList.toggle("selected", j === i));
+  if (focus) {
+    const row = document.querySelectorAll("#segBody tr")[i];
+    if (row) {
+      row.scrollIntoView({ block: "nearest", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+      row.querySelector("input")?.focus();
+    }
+  }
+}
+
+function renderRows() {
+  const w = current(); const body = document.getElementById("segBody");
+  if (!w || !body) return;
+  body.replaceChildren(...w.segments.map((s, i) => segRow(w, s, i)));
+}
+
+function segRow(w, s, i) {
+  const n = w.segments.length;
+  const swatch = el("span", { class: "swatch" });
+  const paintSwatch = () => {
+    swatch.style.background = s.endLevel != null
+      ? `linear-gradient(${levelColor(s.endLevel)}, ${levelColor(s.level)})` : levelColor(s.level);
+  };
+  paintSwatch();
+  const errCell = el("div", { class: "err" });
+  const tr = el("tr", { class: i === state.selSeg ? "selected" : "" });
+  const checkDur = () => {
+    const bad = !(s.sec > 0);
+    tr.classList.toggle("bad", bad);
+    errCell.textContent = bad ? "Needs at least 1 second" : "";
+  };
+
+  const minIn = el("input", { type: "number", min: 0, max: 600, step: 1, value: Math.floor(s.sec / 60), "aria-label": `Segment ${i + 1} minutes` });
+  const secIn = el("input", { type: "number", min: 0, max: 59, step: 5, value: s.sec % 60, "aria-label": `Segment ${i + 1} seconds` });
+  const onDur = () => {
+    const m = Math.max(0, Math.trunc(Number(minIn.value) || 0));
+    const sc = Math.max(0, Math.trunc(Number(secIn.value) || 0));
+    s.sec = m * 60 + sc;
+    checkDur(); commit();
+  };
+  minIn.addEventListener("input", onDur); secIn.addEventListener("input", onDur);
+  secIn.addEventListener("change", () => { minIn.value = Math.floor(s.sec / 60); secIn.value = s.sec % 60; });
+
+  const lvIn = el("input", { type: "number", min: MIN_LEVEL, max: MAX_LEVEL, step: 1, value: s.level, "aria-label": `Segment ${i + 1} level` });
+  lvIn.addEventListener("input", () => { if (lvIn.value !== "") { s.level = clampLevel(lvIn.value); paintSwatch(); commit(); } });
+  lvIn.addEventListener("change", () => { lvIn.value = s.level; });
+
+  const rampChk = el("input", { type: "checkbox", checked: s.endLevel != null, "aria-label": `Segment ${i + 1} ramps` });
+  const endIn = el("input", { type: "number", min: MIN_LEVEL, max: MAX_LEVEL, step: 1, value: s.endLevel ?? s.level,
+    disabled: s.endLevel == null, "aria-label": `Segment ${i + 1} ramp end level` });
+  rampChk.addEventListener("change", () => {
+    s.endLevel = rampChk.checked ? clampLevel(endIn.value) : null;
+    endIn.disabled = !rampChk.checked; paintSwatch(); commit();
+  });
+  endIn.addEventListener("input", () => { if (endIn.value !== "" && rampChk.checked) { s.endLevel = clampLevel(endIn.value); paintSwatch(); commit(); } });
+  endIn.addEventListener("change", () => { if (s.endLevel != null) endIn.value = s.endLevel; });
+
+  const label = el("input", { type: "text", value: s.label, placeholder: `Segment ${i + 1}`, "aria-label": `Segment ${i + 1} label`,
+    oninput: e => { s.label = e.target.value; commit(); } });
+
+  const act = (sym, title, fn, disabled = false) =>
+    el("button", { class: "icon", type: "button", title, "aria-label": title, disabled, onclick: fn }, sym);
+
+  tr.addEventListener("focusin", () => { if (state.selSeg !== i) selectSeg(i); });
+  tr.append(
+    el("td", { class: "sw" }, swatch),
+    el("td", {}, label, errCell),
+    el("td", {}, el("div", { class: "dur" }, minIn, "m", secIn, "s")),
+    el("td", {}, lvIn),
+    el("td", {}, el("label", { class: "ramp" }, rampChk, endIn)),
+    el("td", { class: "acts" },
+      act("↑", "Move up", () => moveSeg(i, -1), i === 0),
+      act("↓", "Move down", () => moveSeg(i, 1), i === n - 1),
+      act("⧉", "Duplicate segment", () => { w.segments.splice(i + 1, 0, { ...s }); state.selSeg = i + 1; commit(true); }),
+      act("✕", "Delete segment", () => {
+        w.segments.splice(i, 1); state.selSeg = Math.min(i, w.segments.length - 1); commit(true);
+      }, n === 1)),
+  );
+  checkDur();
+  return tr;
+}
+
+let repsOpen = false;
+function repsPanel() {
+  const f = { reps: 5, wl: "Hard", wm: 1, ws: 0, wlv: 12, rl: "Easy", rm: 1, rs: 0, rlv: 5 };
+  const inp = (key, attrs = {}) => {
+    const i = el("input", { value: f[key], ...attrs });
+    i.addEventListener("input", () => { f[key] = attrs.type === "number" ? Number(i.value) : i.value; });
+    return i;
+  };
+  const num = (key, label, min, max) => inp(key, { type: "number", min, max, step: 1, "aria-label": label });
+  const go = () => {
+    const w = current();
+    const reps = Math.max(1, Math.min(50, Math.trunc(f.reps) || 1));
+    const wsec = Math.max(0, Math.trunc(f.wm)) * 60 + Math.max(0, Math.trunc(f.ws));
+    const rsec = Math.max(0, Math.trunc(f.rm)) * 60 + Math.max(0, Math.trunc(f.rs));
+    if (wsec <= 0) { toast("The hard part needs at least 1 second.", true); return; }
+    const at = state.selSeg >= 0 ? state.selSeg + 1 : w.segments.length;
+    const block = [];
+    for (let k = 1; k <= reps; k++) {
+      block.push(seg(wsec, clampLevel(f.wlv), f.wl ? `${f.wl} ${k}/${reps}` : ""));
+      if (rsec > 0) block.push(seg(rsec, clampLevel(f.rlv), f.rl));
+    }
+    w.segments.splice(at, 0, ...block);
+    state.selSeg = at + block.length - 1;
+    commit(true);
+    toast(`Added ${reps} intervals.`);
+  };
+  const det = el("details", { class: "reps", open: repsOpen, ontoggle: e => { repsOpen = e.target.open; } },
+    el("summary", {}, "Add a set of intervals"),
+    el("div", { class: "repgrid" },
+      el("span", { class: "h" }, ""), el("span", { class: "h" }, "Label"), el("span", { class: "h" }, "Minutes"),
+      el("span", { class: "h" }, "Seconds"), el("span", { class: "h" }, "Level"),
+      el("span", {}, "Hard"), inp("wl", { type: "text", class: "lbl", "aria-label": "Hard label" }),
+      num("wm", "Hard minutes", 0, 600), num("ws", "Hard seconds", 0, 59), num("wlv", "Hard level", 1, 16),
+      el("span", {}, "Easy"), inp("rl", { type: "text", class: "lbl", "aria-label": "Easy label" }),
+      num("rm", "Easy minutes", 0, 600), num("rs", "Easy seconds", 0, 59), num("rlv", "Easy level", 1, 16),
+      el("span", {}, "Repeats"), num("reps", "Repeats", 1, 50)),
+    el("div", { class: "addbar" },
+      el("button", { class: "btn", type: "button", onclick: go }, "Add intervals")),
+    el("p", { class: "hint", style: "font-size:13px;color:var(--ink-soft);margin:0" },
+      "They’re added after the selected segment, or at the end. Set easy time to 0 for back-to-back efforts."));
+  return det;
+}
+
+// ---- Actions ----
+function addSegment(ramp = false) {
+  const w = current();
+  const prev = w.segments[state.selSeg] || w.segments[w.segments.length - 1];
+  const base = prev ? (prev.endLevel ?? prev.level) : 5;
+  const s = ramp ? seg(300, base, "Ramp", clampLevel(base + 4)) : seg(120, base, "");
+  const at = state.selSeg >= 0 ? state.selSeg + 1 : w.segments.length;
+  w.segments.splice(at, 0, s);
+  state.selSeg = at;
+  commit(true);
+  selectSeg(at, true);
+}
+function moveSeg(i, d) {
+  const w = current(); const j = i + d;
+  [w.segments[i], w.segments[j]] = [w.segments[j], w.segments[i]];
+  state.selSeg = j; commit(true);
+}
+function newWorkout(from) {
+  const w = from
+    ? { id: uuid(), name: from.name, segments: from.segments.map(s => ({ ...s })) }
+    : { id: uuid(), name: "New workout", segments: [seg(300, 4, "Warm-up"), seg(600, 8, "Main"), seg(300, 3, "Cool-down")] };
+  state.workouts.push(w); state.selectedId = w.id; state.selSeg = -1;
+  commit(true);
+  if (!from) document.querySelector(".titlebar input")?.select();
+}
+function duplicateWorkout() {
+  const w = current();
+  newWorkout({ name: `${w.name} (copy)`, segments: w.segments });
+}
+function deleteWorkout() {
+  const w = current();
+  if (!confirm(`Delete “${w.name.trim() || "Untitled"}”? This can’t be undone.`)) return;
+  const i = state.workouts.indexOf(w);
+  state.workouts.splice(i, 1);
+  state.selectedId = state.workouts[Math.min(i, state.workouts.length - 1)]?.id ?? null;
+  state.selSeg = -1; commit(true);
+}
+
+function exportFile() {
+  if (state.workouts.length === 0) { toast("There are no workouts to export yet.", true); return; }
+  const bad = state.workouts.map(w => [w, problems(w)]).filter(([, p]) => p.length);
+  if (bad.length) {
+    const [w, p] = bad[0];
+    state.selectedId = w.id; render();
+    toast(`Fix “${w.name.trim() || "Untitled"}” before exporting: it ${p[0]}.`, true);
+    return;
+  }
+  const blob = new Blob([encodeWorkouts(state.workouts)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = el("a", { href: url, download: "workouts.json" });
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  toast(`Exported ${state.workouts.length} workout${state.workouts.length === 1 ? "" : "s"}.`);
+}
+
+function importFile(file) {
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const { workouts, skipped } = decodeWorkouts(JSON.parse(r.result));
+      let added = 0, updated = 0;
+      for (const w of workouts) {
+        const i = state.workouts.findIndex(x => x.id === w.id);
+        if (i >= 0) { state.workouts[i] = w; updated++; } else { state.workouts.push(w); added++; }
+      }
+      if (workouts.length && !current()) state.selectedId = workouts[0].id;
+      state.selSeg = -1; commit(true);
+      const parts = [];
+      if (added) parts.push(`added ${added}`);
+      if (updated) parts.push(`updated ${updated}`);
+      if (skipped) parts.push(`skipped ${skipped} damaged`);
+      toast(parts.length ? `Imported: ${parts.join(", ")}.` : "That file has no workouts in it.", !added && !updated);
+    } catch (e) {
+      toast(e instanceof SyntaxError ? "That file isn’t valid JSON." : e.message, true);
+    }
+  };
+  r.onerror = () => toast("Couldn’t read that file.", true);
+  r.readAsText(file);
+}
+
+// ---- Wire up ----
+const tpl = document.getElementById("tplSelect");
+TEMPLATES.forEach((t, i) => tpl.append(el("option", { value: i }, t.name)));
+tpl.addEventListener("change", () => {
+  if (tpl.value === "") return;
+  newWorkout(TEMPLATES[Number(tpl.value)]);
+  tpl.value = "";
+});
+document.getElementById("newBtn").addEventListener("click", () => newWorkout());
+document.getElementById("exportBtn").addEventListener("click", exportFile);
+const fileInput = document.getElementById("fileInput");
+document.getElementById("importBtn").addEventListener("click", () => fileInput.click());
+fileInput.addEventListener("change", () => { if (fileInput.files[0]) importFile(fileInput.files[0]); fileInput.value = ""; });
+document.addEventListener("dragover", e => e.preventDefault());
+document.addEventListener("drop", e => {
+  e.preventDefault();
+  const f = e.dataTransfer?.files?.[0];
+  if (f) importFile(f);
+});
+
+load();
+render();
+</script>
+</body>
+</html>
