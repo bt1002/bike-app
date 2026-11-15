@@ -3,10 +3,10 @@
 Location: `MerachRide/HANDOFF.md` (moved from the repo root 2026-11-14 so it sits in the folder opened in Android Studio).
 
 ## Status
-**Phase:** UI features. Android Studio is installed on the primary dev PC (Gradle JDK 23). As of 2026-11-15 the project compiles, all **69 unit tests pass**, and the app runs on the phone (installed over Wireless debugging). The app has Ride / Workouts / History tabs, custom workouts with ramp segments, workout Import/Export, and ride history; these haven't been tried on a ride yet. A web workout builder lives at `tools/workout-builder.html` (repo root). Still to test on the bike: sleep/reconnect and the new UI (step 1 in Next Steps).
+**Phase:** UI features, ready for a full test ride. Android Studio is installed on the primary dev PC (Gradle JDK 23). As of 2026-11-15 the project compiles, all **92 unit tests pass**, and the latest build (`8d67696`) is installed on the user's phone (a **Pixel 11 Pro**, over Wireless debugging). The app has Ride / Workouts / History tabs; custom workouts with ramps; workout Import/Export plus a web builder (`tools/workout-builder.html`); ride history with pace targets; Pixel Watch heart rate; a −/+ offset for the rest of a workout; Bike/Watch status lights; imperial units; and a **simulated bike** for testing in the emulator. Verified on real hardware so far: bike connect and level control, following the bike's buttons, `0x2AD2` units, Pixel Watch 2 heart rate, and builder → app import. Everything else has only been checked in the emulator with the simulated bike, or not at all (see Next Steps).
 **Protocol:** Standard FTMS. Resistance-level control only (1–16; write `04 <level*10>`). No power target (no native ERG). Bike reports power, cadence, HR, etc. via `0x2AD2`.
 **Blocking item:** None.
-**Uncommitted work:** None. Local `main` is ahead of `origin/main` (not pushed; push only when the user asks).
+**Uncommitted work:** None. Push only when the user asks.
 
 ## Goal
 Native Android app that connects to a Merach S29 Aura exercise bike over Bluetooth LE and runs basic structured workouts by commanding the bike's resistance automatically.
@@ -24,9 +24,12 @@ Native Android app that connects to a Merach S29 Aura exercise bike over Bluetoo
 
 ## Next Steps
 Build, install and the first bike tests are done (see Log). Remaining:
-1. **Test on the bike:**
+1. **Test on the bike** (read the app log soon after: `adb logcat -d -v time -s MerachRide:*`):
    - Let the bike sleep mid-workout, then check that the app reconnects and resumes the workout.
-   - Try the new UI on a real ride: Ride tab readability, a custom workout, the **8 / 12 Ramps** workout, and whether History's distance and kcal match the bike.
+   - A real ride with the new UI: Ride tab readability, a ramp workout (**Stairs** or **8 / 12 Ramps**), the −/+ offset, and whether History's distance, kcal and average speed match the bike.
+   - Connect with the watch's Connected Fitness turned on *after* tapping Connect; the Watch light should go green within the 3-minute window. Check whether the watch keeps sharing on between workouts.
+   - Ride the same workout twice and check the pace target and arrows on the second ride.
+   - Check HR stats appear in the saved ride, and that the watch reconnects if it drops.
 2. **Web workout builder: built; import into the app verified by the user 2026-11-15.** Still to try: Export from the app back into the builder. `tools/workout-builder.html` exports `workouts.json`; the app's Workouts tab has **Import** (merges by `id`: same id replaces, others are added) and **Export**. To test: build a workout in the browser → Export → copy the file to the phone (USB, Drive or email) → Import in the app → ride it. Then Export from the app and Import into the builder.
    - Possible later: a QR code to send a single workout without a file; serve the builder from GitHub Pages so it's at a URL.
    - The builder loads Google Fonts (falls back to system fonts offline) and keeps its workouts in the browser's local storage.
@@ -97,3 +100,8 @@ Answered by discovery: the S29 exposes FTMS (`0x1826`) plus a proprietary "MERAC
 - 2026-11-15 — One **Connect** button now connects the bike and the last heart rate monitor; Disconnect stops both.
 - 2026-11-15 — **Pace vs past rides (unverified on the bike):** rides now save average speed (while pedalling) and a `workoutKey` (`Workout.key`: the id for custom workouts, `builtin:<name>` for built-ins; old rides match by name). `history/PaceTarget` averages speed and HR over the last 5 rides of the loaded workout. The Ride tab's new pace panel shows now / this ride's average / target for km/h and bpm. After 30 s of riding, the speed arrow compares this ride's average with the target: green ▲ above, red ▼ below, = within ±2%. The HR arrow is neutral grey (higher HR isn't better or worse). History shows average speed. 84 unit tests pass. The Ride tab is now quite full in portrait; check the workout card still has room on the phone.
 - 2026-11-15 — Display units switched to **imperial** (mph, miles) at the user's request via `ui/Units.kt`. Storage and calculations stay metric (km/h, metres in `rides.json` and `BikeData`), so saved rides are unaffected.
+- 2026-11-15 — **Simulated bike** for testing without hardware (debug builds only): "Connect to simulated bike (debug)" in the bike picker; the 🔧 icon opens controls (bike +/− buttons, pedalling, cadence, 1/5/10/30× time speed, drop connection, reset counters). `sim/BikeSimulator` emits real-format `0x2AD2` packets through `BikeSession.onBikeData`; `sim/TimeScale` speeds up the workout timer and ride recording. Its power/speed/kcal formulas are made up, not fitted to the S29. Checked by the agent in the emulator: live data, ride recording, following the bike's button presses (5 → 7), and drop → "Reconnect attempt 2" → level re-applied.
+- 2026-11-15 — Ride tab fixes and additions, checked in a Pixel 10 emulator: the workout card is compact so the **profile chart** always shows (it collapsed to zero height); **− ±0 +** in the card's title row shifts the rest of the workout by a level (`WorkoutState.levelOffset`, `Workout.levelAt(t, offset)` clamped to 1..16; resets on load/restart; the chart redraws unfinished segments). Rides done with an offset still count towards that workout's pace target.
+- 2026-11-15 — History: a 🗑 icon on each ride (with confirmation) and **Reset history** (deletes all rides; workouts kept). Built-in **Stairs** workout added from the user's own emulator design (6→12 up, 12→6 down, 5 min each, ×3), also in the web builder's templates.
+- 2026-11-15 — **Bike / Watch status lights** in the Ride tab header (green connected, amber connecting, red = watch missing while the bike is connected; tap Watch for the heart rate sheet, which replaces the ♡ icon). A one-line warning shows while riding without heart rate. The main Connect now keeps looking for the watch for **3 minutes** (`HeartRateMonitor.connect(waitForMonitor = true)`), so sharing can be turned on after tapping Connect; a device picked by hand still gives up after 3 tries. Installed on the phone; not yet tried on a ride.
+- 2026-11-15 — Reconnecting the phone: it stays paired, so `adb mdns services` finds it and `adb connect <ip:port>` reconnects without pairing again. Updated README.md, MerachRide/README.md, CLAUDE.md and this file.
