@@ -81,5 +81,4 @@ Reinstalling from Android Studio keeps them; uninstalling deletes them.
 
 - Reconnecting after the bike goes to sleep, and resuming the workout.
 - The new UI, ramp workouts, and whether History's distance and kcal match the bike's display.
-- Importing a file from the web builder on the phone (the file format is unit-tested).
 - One unexplained jump to level 16 during the last segment of Quick Test (seen once; parked).
