@@ -43,7 +43,7 @@ object WorkoutCodec {
                             endLevel = s.intOrNull("endLevel")?.coerceIn(FtmsProtocol.MIN_LEVEL, FtmsProtocol.MAX_LEVEL),
                         )
                     },
-                    id = w.str("id"),
+                    id = w.strOrNull("id") ?: "", // WorkoutImport gives id-less entries a new id.
                 )
             }.getOrNull()
         }

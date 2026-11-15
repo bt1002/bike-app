@@ -41,8 +41,8 @@ Read `MerachRide/HANDOFF.md` first. It has the current status, the discovery log
 - `BikeSession.kt`: app-wide singleton. Handles scan, connect, the FTMS handshake, auto-reconnect,
   resistance commands and the in-app log.
 - `workout/`: model (segments hold a level or ramp via `endLevel`), engine (1 s ticker on the Main dispatcher;
-  sends a level whenever `Workout.levelAt` changes), built-in workouts, editor draft (`WorkoutDraft`) and
-  `WorkoutCodec` (`workouts.json`).
+  sends a level whenever `Workout.levelAt` changes), built-in workouts, editor draft (`WorkoutDraft`),
+  `WorkoutCodec` (`workouts.json`) and `WorkoutImport` (merge an imported file by id).
 - `history/`: `RideRecorder` (pure: ride stats from 1 Hz samples, handles bike counter restarts),
   `RideTracker` (ride start/finish/save, Main thread) and `RideCodec` (`rides.json`).
 - `data/`: `MiniJson` (dependency-free JSON, so save formats are JVM-testable) and `JsonFileStore`
@@ -51,6 +51,9 @@ Read `MerachRide/HANDOFF.md` first. It has the current status, the discovery log
 - `service/RideService.kt`: foreground service that keeps the process alive during a ride.
 - `ui/`: Compose screens. `MainScreen` has Ride / Workouts / History tabs (no navigation library).
 - Tests are in `MerachRide/app/src/test/`. Keep new logic in pure Kotlin classes so it stays testable.
+- `tools/workout-builder.html` (repo root, outside the Android project): single-page web workout builder.
+  It mirrors `Segment.levelAt`, the built-in workouts and the `workouts.json` format. **If you change any of
+  those in Kotlin, update the builder to match.**
 
 ## Working conventions
 

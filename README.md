@@ -21,6 +21,8 @@ publishes no protocol documentation. Probing the bike showed that it speaks the 
 - Live power, cadence, level, speed, heart rate, calories, distance and time on one screen.
 - Set the level from the app or the bike's buttons; the app keeps them in sync.
 - Built-in workouts, plus your own: segments that hold a level or **ramp** smoothly between levels.
+- A **web workout builder** ([`tools/workout-builder.html`](tools/workout-builder.html)) for making workouts
+  on a computer. Open it in a browser, export `workouts.json`, and use **Import** on the app's Workouts tab.
 - Ride history with per-ride stats (time, distance, kcal, power, cadence, heart rate) and totals.
 
 ## What's verified
@@ -43,6 +45,7 @@ Tested on the bike (2026-11-14):
 |---|---|
 | [`MerachRide/`](MerachRide/) | Android Studio project (Kotlin + Jetpack Compose). See [its README](MerachRide/README.md) for build and usage. |
 | [`MerachRide/HANDOFF.md`](MerachRide/HANDOFF.md) | Project status, discovery log, open questions and next steps |
+| [`tools/workout-builder.html`](tools/workout-builder.html) | Web workout builder: a single HTML page, no install needed |
 | [`CLAUDE.md`](CLAUDE.md) | Notes for the AI coding assistant working on this repo |
 | [`screenshots/`](screenshots/) | nRF Connect captures of the bike's Bluetooth services |
 

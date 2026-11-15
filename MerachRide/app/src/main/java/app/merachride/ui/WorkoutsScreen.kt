@@ -1,6 +1,11 @@
 package app.merachride.ui
 
+import android.content.Context
+import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -37,9 +42,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -50,7 +57,13 @@ import app.merachride.protocol.FtmsProtocol
 import app.merachride.workout.SampleWorkouts
 import app.merachride.workout.SegmentDraft
 import app.merachride.workout.Workout
+import app.merachride.workout.WorkoutCodec
 import app.merachride.workout.WorkoutDraft
+import app.merachride.workout.WorkoutImport
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
 import java.util.UUID
 
 /** Built-in and custom workouts. Tapping one loads it on the Ride tab; custom ones can be edited. */
@@ -61,6 +74,41 @@ fun WorkoutsScreen(
     modifier: Modifier = Modifier,
 ) {
     val custom by store.items.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    // Import: merge a workouts.json (e.g. from tools/workout-builder.html) into My workouts.
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val message = try {
+                val text = withContext(Dispatchers.IO) { readSmallText(context, uri) }
+                val r = WorkoutImport.merge(store.items.value, text, ::newId)
+                store.update { r.workouts }
+                r.summary
+            } catch (e: Exception) {
+                "Couldn't import that file: ${e.message ?: "unreadable"}"
+            }
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+        }
+    }
+    // Export: save My workouts as workouts.json, to edit in the web builder or back up.
+    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        val list = store.items.value
+        scope.launch {
+            val message = try {
+                withContext(Dispatchers.IO) {
+                    val out = context.contentResolver.openOutputStream(uri) ?: error("can't open the file")
+                    out.use { it.write(WorkoutCodec.encode(list).toByteArray(Charsets.UTF_8)) }
+                }
+                "Exported ${list.size} workout${if (list.size == 1) "" else "s"}."
+            } catch (e: Exception) {
+                "Couldn't export: ${e.message ?: "write failed"}"
+            }
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+        }
+    }
     // Not saved across rotation: the editor is short-lived and losing a half-typed draft on rotate is acceptable for now.
     var editing by remember { mutableStateOf<WorkoutDraft?>(null) }
     var confirmDelete by remember { mutableStateOf<Workout?>(null) }
@@ -96,10 +144,25 @@ fun WorkoutsScreen(
                 }
             }
         }
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { importLauncher.launch(arrayOf("*/*")) }) { Text("Import") }
+                OutlinedButton(
+                    onClick = {
+                        if (custom.isEmpty()) {
+                            Toast.makeText(context, "No workouts of your own to export yet.", Toast.LENGTH_SHORT).show()
+                        } else {
+                            exportLauncher.launch("workouts.json")
+                        }
+                    },
+                ) { Text("Export") }
+            }
+        }
         if (custom.isEmpty()) {
             item {
                 Text(
-                    "No workouts of your own yet. Tap New, or Copy a built-in one below and change it.",
+                    "No workouts of your own yet. Tap New, Copy a built-in one below, or Import a " +
+                        "workouts.json made with the web workout builder.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -145,6 +208,24 @@ fun WorkoutsScreen(
 }
 
 private fun newId() = UUID.randomUUID().toString()
+
+/** Reads a small text file chosen by the user. Refuses anything over 1 MB (workout files are a few KB). */
+private fun readSmallText(context: Context, uri: Uri): String {
+    val bytes = context.contentResolver.openInputStream(uri)?.use { input ->
+        val buf = ByteArrayOutputStream()
+        val chunk = ByteArray(8 * 1024)
+        while (true) {
+            val n = input.read(chunk)
+            if (n < 0) break
+            buf.write(chunk, 0, n)
+            if (buf.size() > MAX_IMPORT_BYTES) throw IllegalArgumentException("file is too big for a workouts file")
+        }
+        buf.toByteArray()
+    } ?: throw IllegalArgumentException("can't open the file")
+    return String(bytes, Charsets.UTF_8)
+}
+
+private const val MAX_IMPORT_BYTES = 1_000_000
 
 private fun copyOf(w: Workout) = WorkoutDraft.from(w, id = newId(), name = "${w.name} (copy)")
 

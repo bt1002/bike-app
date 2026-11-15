@@ -3,7 +3,7 @@
 Location: `MerachRide/HANDOFF.md` (moved from the repo root 2026-11-14 so it sits in the folder opened in Android Studio).
 
 ## Status
-**Phase:** UI features. Android Studio is installed on the primary dev PC (Gradle JDK 23). As of 2026-11-14 the project compiles, all **63 unit tests pass**, and the app runs on the phone (installed over Wireless debugging). The app has Ride / Workouts / History tabs, custom workouts with ramp segments, and ride history; these haven't been tried on a ride yet. Still to test on the bike: sleep/reconnect and the new UI (step 1 in Next Steps).
+**Phase:** UI features. Android Studio is installed on the primary dev PC (Gradle JDK 23). As of 2026-11-15 the project compiles, all **69 unit tests pass**, and the app runs on the phone (installed over Wireless debugging). The app has Ride / Workouts / History tabs, custom workouts with ramp segments, workout Import/Export, and ride history; these haven't been tried on a ride yet. A web workout builder lives at `tools/workout-builder.html` (repo root). Still to test on the bike: sleep/reconnect and the new UI (step 1 in Next Steps).
 **Protocol:** Standard FTMS. Resistance-level control only (1–16; write `04 <level*10>`). No power target (no native ERG). Bike reports power, cadence, HR, etc. via `0x2AD2`.
 **Blocking item:** None.
 **Uncommitted work:** None. Local `main` is ahead of `origin/main` (not pushed; push only when the user asks).
@@ -27,11 +27,9 @@ Build, install and the first bike tests are done (see Log). Remaining:
 1. **Test on the bike:**
    - Let the bike sleep mid-workout, then check that the app reconnects and resumes the workout.
    - Try the new UI on a real ride: Ride tab readability, a custom workout, the **8 / 12 Ramps** workout, and whether History's distance and kcal match the bike.
-2. **TODO (user request, 2026-11-14): web workout builder.** A GUI on a computer for easily building workouts, which then get onto the phone. Ideas, not decided:
-   - A single static HTML page (no server, no installs), opened in a browser, that builds workouts with the same model: segments with minutes, seconds, level 1–16, an optional ramp end level, and a label. Show a live chart.
-   - Export a file in the app's `workouts.json` format (`WorkoutCodec`: `{"version":1,"workouts":[{"id","name","segments":[{"sec","level","label","endLevel"}]}]}`).
-   - Getting it onto the phone: an **Import** button in the Workouts tab (Android file picker), plus Export from the app so workouts can be edited on the computer and sent back. A QR code is an option for single workouts.
-   - Decide whether import merges (by `id`) or replaces.
+2. **Web workout builder: built, test the round trip.** `tools/workout-builder.html` exports `workouts.json`; the app's Workouts tab has **Import** (merges by `id`: same id replaces, others are added) and **Export**. To test: build a workout in the browser → Export → copy the file to the phone (USB, Drive or email) → Import in the app → ride it. Then Export from the app and Import into the builder.
+   - Possible later: a QR code to send a single workout without a file; serve the builder from GitHub Pages so it's at a URL.
+   - The builder loads Google Fonts (falls back to system fonts offline) and keeps its workouts in the browser's local storage.
 3. Later ideas: app-side ERG (adjust the level to hold target watts), exporting ride history (CSV/FIT), and the parked one-off jump to 16 during Quick Test.
 
 ## Reference: FTMS
@@ -92,3 +90,4 @@ Answered by discovery: the S29 exposes FTMS (`0x1826`) plus a proprietary "MERAC
   - JSON is handled by `data/MiniJson` (no new dependency). Edits to `build.gradle.kts` from the agent time out, so avoid build file changes where possible.
 - 2026-11-14 — Added built-in **8 / 12 Ramps** workout (user request) and **ramp segments**: a segment can step steadily from `level` to `endLevel`, one level at a time, with equal time per level (`Segment.levelAt`). The editor has a "Ramp to another level" switch. 63 unit tests pass; not yet ridden.
 - 2026-11-14 — User added a TODO: web workout builder (see Next Steps). Updated README.md, MerachRide/README.md, CLAUDE.md and this file to match the current app.
+- 2026-11-15 — User added `tools/workout-builder.html` (web builder; reviewed: its export matches `WorkoutCodec` and its ramp maths matches `Segment.levelAt`). Added **Import/Export** to the Workouts tab (`workout/WorkoutImport`, merge by id; id-less entries get a new id; files over 1 MB refused). 69 unit tests pass; installed on the phone; import from the builder not yet tried on the device.

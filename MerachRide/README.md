@@ -4,7 +4,7 @@ Android app (Kotlin + Jetpack Compose) that connects to a **Merach S29 Aura** bi
 using the standard FTMS protocol. It shows live stats, runs structured workouts by setting the bike's
 resistance (levels 1–16) automatically, and keeps a history of your rides.
 
-**Status (2026-11-14):** builds in Android Studio, 63 unit tests pass, and it runs on a phone. Connecting,
+**Status (2026-11-15):** builds in Android Studio, 69 unit tests pass, and it runs on a phone. Connecting,
 setting levels from the app and following the bike's own buttons are verified on the bike. The newer
 features (ride layout, custom workouts, ramps, history) are installed but not yet tried on a ride.
 
@@ -34,6 +34,9 @@ Unit tests: right-click `app/src/test` → **Run Tests**, or Gradle task `app:te
    - **New** creates your own workout; **Copy** turns a built-in one into an editable copy.
    - Each segment has a time, a level, and optionally a **ramp** to another level, which the app steps
      through one level at a time.
+   - **Import** / **Export** load and save `workouts.json`, so you can build workouts on a computer with
+     the web builder (`tools/workout-builder.html` in the repo) and copy the file to the phone. Import
+     replaces workouts with the same id and adds the rest.
 6. A ride is recorded automatically from your first pedal stroke. Tap **Finish ride** (or disconnect) to
    save it to the **History** tab. Rides under a minute aren't saved.
 7. The ⓘ icon at the top of the Ride tab opens the connection log. Check it first if something misbehaves.
@@ -78,4 +81,5 @@ Reinstalling from Android Studio keeps them; uninstalling deletes them.
 
 - Reconnecting after the bike goes to sleep, and resuming the workout.
 - The new UI, ramp workouts, and whether History's distance and kcal match the bike's display.
+- Importing a file from the web builder on the phone (the file format is unit-tested).
 - One unexplained jump to level 16 during the last segment of Quick Test (seen once; parked).
