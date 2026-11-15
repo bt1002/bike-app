@@ -3,10 +3,10 @@
 Location: `MerachRide/HANDOFF.md` (moved from the repo root 2026-11-14 so it sits in the folder opened in Android Studio).
 
 ## Status
-**Phase:** On-bike testing. Android Studio is installed on the primary dev PC (Gradle JDK 23). As of 2026-11-14 the project **compiles**, `assembleDebug` produces an APK, and all **24 unit tests pass**. Nothing has run on a phone or the bike yet.
+**Phase:** On-bike testing. Android Studio is installed on the primary dev PC (Gradle JDK 23). As of 2026-11-14 the project compiles, all **31 unit tests pass**, and the app runs on the phone (installed over Wireless debugging). On-bike results are in the Log.
 **Protocol:** Standard FTMS. Resistance-level control only (1–16; write `04 <level*10>`). No power target (no native ERG). Bike reports power, cadence, HR, etc. via `0x2AD2`.
 **Blocking item:** None.
-**Uncommitted work:** The review fixes from 2026-11-14 (see Log) are in the working tree and not committed yet. The project now builds, so they're ready to commit.
+**Uncommitted work:** None. Local `main` is ahead of `origin/main` (not pushed).
 
 ## Goal
 Native Android app that connects to a Merach S29 Aura exercise bike over Bluetooth LE and runs basic structured workouts by commanding the bike's resistance automatically.
@@ -84,3 +84,5 @@ Discovery is done (see Log), so these steps start at the first build.
 - 2026-11-14 — Code review fixes (still uncompiled): resistance from `0x2AD2` now goes through new `protocol/ResistanceScale` (old heuristic showed level 1 as 10 if the bike reports 0.1 units; the detected unit is logged); stray/late Control Point replies are ignored instead of failing the next command; state leaves `Ready` as soon as the link drops; a running workout pauses on link loss and resumes on reconnect; fast −/+ taps no longer lose steps and the bike always ends on the latest target. Plan: install Android Studio on this PC.
 - 2026-11-14 — Android Studio installed on the primary dev PC. Gradle sync needed **Gradle JDK = 23** (Settings → Build → Build Tools → Gradle).
 - 2026-11-14 — **First build succeeded with no code changes.** `:app:compileDebugKotlin`, `:app:testDebugUnitTest` (24 passed, 0 failed) and `:app:assembleDebug` all pass. Next: commit, install on the phone, then test on the bike.
+- 2026-11-14 — **First on-bike test (verified by user):** permissions, connect, and manual −/+ across 1–16 all work; bike display matches the app. Quick Test runs. Problems: (a) once, during the last segment (level 1) at ~1:45, the felt resistance jumped to 16. The app log only shows `Level 16` then `Level 1`, so the cause is unknown; parked for now. (b) Changing the level with the bike's buttons isn't reflected in the app. The "Bike reports resistance in …" line wasn't captured, so the `0x2AD2` units are still unverified. Fix (unverified): new `protocol/ManualChangeDetector` makes the app's target follow a level change reported by the bike (ignoring reports within 3 s of an app command); every change in the raw resistance value is now logged.
+- 2026-11-14 — **Verified on the bike:** `0x2AD2` reports resistance in **whole levels** (log: `Bike resistance raw 14 (level 14)`, `raw 11 (level 11)`, `raw 1 (level 1)`). The app's level now tracks changes from both the app and the bike's buttons. Still open: the one-off jump to 16 during the last Quick Test segment (parked), and sleep/reconnect (step 5, not yet tested).

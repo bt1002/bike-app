@@ -8,6 +8,7 @@ import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.content.Intent
+import android.os.SystemClock
 import android.util.Log
 import androidx.core.content.ContextCompat
 import app.merachride.ble.BleConnection
@@ -17,6 +18,7 @@ import app.merachride.protocol.FtmsProtocol
 import app.merachride.protocol.FtmsProtocol.ResultCode
 import app.merachride.protocol.FtmsUuids
 import app.merachride.protocol.IndoorBikeDataParser
+import app.merachride.protocol.ManualChangeDetector
 import app.merachride.protocol.ResistanceScale
 import app.merachride.service.RideService
 import app.merachride.workout.WorkoutEngine
@@ -100,6 +102,7 @@ class BikeSession(
     @Volatile private var pending: PendingCommand? = null
 
     private val resistanceScale = ResistanceScale()
+    private val manualChange = ManualChangeDetector()
 
     /** True when the workout was paused because the link dropped, so it resumes on reconnect. */
     @Volatile private var resumeWorkoutOnReconnect = false
@@ -118,14 +121,26 @@ class BikeSession(
 
     private fun onBikeData(bytes: ByteArray) {
         val unitBefore = resistanceScale.unit
+        val rawBefore = _data.value.resistanceRaw
         _data.update { prev ->
             val d = IndoorBikeDataParser.parse(bytes, prev)
             d.copy(resistanceLevel = d.resistanceRaw?.let { resistanceScale.toLevel(it, _targetLevel.value) })
         }
+        val now = _data.value
         val unitAfter = resistanceScale.unit
         if (unitAfter != unitBefore) {
             // Logged so the unverified unit question can be answered from the in-app log.
-            log("Bike reports resistance in ${unitAfter.name.lowercase()} (raw ${_data.value.resistanceRaw})")
+            log("Bike reports resistance in ${unitAfter.name.lowercase()} (raw ${now.resistanceRaw})")
+        }
+        if (now.resistanceRaw != rawBefore) {
+            // Diagnostic (unverified behaviour): shows whether button presses on the bike reach 0x2AD2.
+            log("Bike resistance raw ${now.resistanceRaw} (level ${now.resistanceLevel ?: "?"})")
+        }
+        manualChange.onReported(now.resistanceLevel, _targetLevel.value, SystemClock.elapsedRealtime())?.let { level ->
+            // The rider changed the level on the bike. Follow it rather than fight it; a running
+            // workout sets its own level again at the next segment.
+            _targetLevel.value = level
+            log("Level changed on the bike: $level")
         }
     }
 
@@ -267,6 +282,7 @@ class BikeSession(
         }
         if (!conn.connect(a.getRemoteDevice(address))) return false
         _data.value = BikeData()
+        manualChange.reset()
 
         if (!conn.enableNotifications(FtmsUuids.SERVICE, FtmsUuids.INDOOR_BIKE_DATA, indicate = false)) {
             log("Warning: no live data subscription")
@@ -333,6 +349,7 @@ class BikeSession(
     private suspend fun sendCommand(bytes: ByteArray): ResultCode = commandMutex.withLock {
         val p = PendingCommand(bytes[0].toInt() and 0xFF, CompletableDeferred())
         pending = p
+        manualChange.onCommandSent(SystemClock.elapsedRealtime())
         try {
             if (!conn.write(FtmsUuids.SERVICE, FtmsUuids.CONTROL_POINT, bytes)) {
                 return@withLock ResultCode.WRITE_FAILED
@@ -340,6 +357,7 @@ class BikeSession(
             withTimeoutOrNull(COMMAND_TIMEOUT_MS) { p.result.await() } ?: ResultCode.TIMEOUT
         } finally {
             pending = null
+            manualChange.onCommandSent(SystemClock.elapsedRealtime()) // The bike's report lags the reply too.
         }
     }
 

@@ -24,8 +24,9 @@ Read `MerachRide/HANDOFF.md` first. It has the current status, the discovery log
 - Range is levels 1–16. Resistance target only; no power/ERG target.
 - Proprietary service `59554c55-…-4d4552414348` ("MERACH") is a fallback that hasn't been explored.
   **Never write to `02f00000-…-fe00`**, which is probably firmware update (OTA).
-- Unverified: whether Indoor Bike Data (`0x2AD2`) reports resistance as `8` or `80`.
-  `protocol/ResistanceScale` works it out from the first unambiguous value and logs the answer.
+- Indoor Bike Data (`0x2AD2`) reports resistance in **whole levels** (level 14 = raw `14`), verified on the
+  bike 2026-11-14. It also reports changes made with the bike's own buttons, which the app follows via
+  `protocol/ManualChangeDetector`. `protocol/ResistanceScale` still auto-detects the unit as a safeguard.
 
 ## Code layout (`MerachRide/app/src/main/java/app/merachride/`)
 
