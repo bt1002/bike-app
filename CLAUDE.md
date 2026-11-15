@@ -7,8 +7,13 @@ Read `MerachRide/HANDOFF.md` first. It has the current status, the discovery log
 
 - **Build setup (since 2026-11-14):** Android Studio is installed on the primary dev PC, and the user now has
   admin rights there. Gradle sync needs **Gradle JDK 23** (Settings → Build → Build Tools → Gradle).
-  The first successful build hasn't happened yet, so check the Status in `MerachRide/HANDOFF.md` before assuming anything compiles.
-  - Don't claim code compiles or works until it has actually been built or tested. Otherwise say it's unverified.
+  The agent can build, run unit tests (`:app:testDebugUnitTest`) and install on the user's phone (paired over
+  Wireless debugging) through the Android Studio tools. adb is at `%LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe`.
+  - Don't claim code works until it has actually been built or tested. Otherwise say it's unverified.
+  - Edits to `build.gradle.kts` from the agent tend to time out (and may land later). Avoid new dependencies
+    where you can; after a build file change, run a Gradle sync before deploying.
+  - The phone's logcat buffer rolls over quickly. Read the app's lines soon after a ride:
+    `adb logcat -d -v time -s MerachRide:*`.
   - Don't upgrade the pins casually: AGP 8.7.3, Gradle 8.10.2, Kotlin 2.0.21, Compose BOM 2024.12.01.
   - Check Kotlin precedence carefully: `a and b == c` parses as `a and (b == c)`. Parenthesize bit masks.
   - Ask before installing system-wide software. Use the built-in tools (PowerShell plus .NET
@@ -30,14 +35,22 @@ Read `MerachRide/HANDOFF.md` first. It has the current status, the discovery log
 
 ## Code layout (`MerachRide/app/src/main/java/app/merachride/`)
 
-- `protocol/`: pure Kotlin with no Android imports, unit-tested. FTMS bytes, data parser, `BikeController`.
+- `protocol/`: pure Kotlin with no Android imports, unit-tested. FTMS bytes, data parser, `BikeController`,
+  `ResistanceScale`, `ManualChangeDetector`.
 - `ble/BleConnection.kt`: one GATT connection with a serialized operation queue (one op in flight).
 - `BikeSession.kt`: app-wide singleton. Handles scan, connect, the FTMS handshake, auto-reconnect,
   resistance commands and the in-app log.
-- `workout/`: model, engine (1 s ticker on the Main dispatcher) and built-in workouts.
+- `workout/`: model (segments hold a level or ramp via `endLevel`), engine (1 s ticker on the Main dispatcher;
+  sends a level whenever `Workout.levelAt` changes), built-in workouts, editor draft (`WorkoutDraft`) and
+  `WorkoutCodec` (`workouts.json`).
+- `history/`: `RideRecorder` (pure: ride stats from 1 Hz samples, handles bike counter restarts),
+  `RideTracker` (ride start/finish/save, Main thread) and `RideCodec` (`rides.json`).
+- `data/`: `MiniJson` (dependency-free JSON, so save formats are JVM-testable) and `JsonFileStore`
+  (StateFlow list saved with `AtomicFile`).
+- `MerachRideApp.kt`: creates the app-wide singletons (session, workout store, ride history, ride tracker).
 - `service/RideService.kt`: foreground service that keeps the process alive during a ride.
-- `ui/`: Compose screens.
-- Tests are in `MerachRide/app/src/test/`. Keep new protocol logic in `protocol/` so it stays testable.
+- `ui/`: Compose screens. `MainScreen` has Ride / Workouts / History tabs (no navigation library).
+- Tests are in `MerachRide/app/src/test/`. Keep new logic in pure Kotlin classes so it stays testable.
 
 ## Working conventions
 

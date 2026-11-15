@@ -3,10 +3,10 @@
 Location: `MerachRide/HANDOFF.md` (moved from the repo root 2026-11-14 so it sits in the folder opened in Android Studio).
 
 ## Status
-**Phase:** UI features. Android Studio is installed on the primary dev PC (Gradle JDK 23). As of 2026-11-14 the project compiles, all **54 unit tests pass**, and the app runs on the phone (installed over Wireless debugging). The app has Ride / Workouts / History tabs, custom workouts and ride history; these haven't been tried on the bike yet. Still to test on the bike: sleep/reconnect (step 5 in Next Steps).
+**Phase:** UI features. Android Studio is installed on the primary dev PC (Gradle JDK 23). As of 2026-11-14 the project compiles, all **63 unit tests pass**, and the app runs on the phone (installed over Wireless debugging). The app has Ride / Workouts / History tabs, custom workouts with ramp segments, and ride history; these haven't been tried on a ride yet. Still to test on the bike: sleep/reconnect and the new UI (step 1 in Next Steps).
 **Protocol:** Standard FTMS. Resistance-level control only (1–16; write `04 <level*10>`). No power target (no native ERG). Bike reports power, cadence, HR, etc. via `0x2AD2`.
 **Blocking item:** None.
-**Uncommitted work:** None. Local `main` is ahead of `origin/main` (not pushed).
+**Uncommitted work:** None. Local `main` is ahead of `origin/main` (not pushed; push only when the user asks).
 
 ## Goal
 Native Android app that connects to a Merach S29 Aura exercise bike over Bluetooth LE and runs basic structured workouts by commanding the bike's resistance automatically.
@@ -34,7 +34,7 @@ Build, install and the first bike tests are done (see Log). Remaining:
    - Decide whether import merges (by `id`) or replaces.
 3. Later ideas: app-side ERG (adjust the level to hold target watts), exporting ride history (CSV/FIT), and the parked one-off jump to 16 during Quick Test.
 
-## Reference: FTMS (if supported)
+## Reference: FTMS
 | Characteristic | UUID | Use |
 |---|---|---|
 | Fitness Machine Feature | `0x2ACC` | Which control features are supported |
@@ -48,21 +48,22 @@ Build, install and the first bike tests are done (see Log). Remaining:
 1. Enable indications on `0x2AD9` (CCCD = `0x0200`).
 2. Write `00` — Request Control. Expect response `80 00 01`.
 3. Write `07` — Start/Resume.
-4. Write `04 XX` — Set Target Resistance Level (uint8, 0.1 units; check `0x2AD6`).
-   or `05 LL HH` — Set Target Power in watts (sint16 LE), if supported.
-5. Subscribe to `0x2AD2` for live data.
+4. Write `04 XX` — Set Target Resistance Level (uint8, 0.1 units: level N = N×10). Verified on the S29.
+   (`05 LL HH`, Set Target Power, is **not** supported by the S29.)
+5. Subscribe to `0x2AD2` for live data. The S29 reports resistance in whole levels.
 
-## Planned Architecture (Kotlin + Jetpack Compose)
-- **BLE layer:** foreground service owning the GATT connection; serialized write queue; auto-reconnect.
-- **Protocol layer:** `BikeController` interface → `FtmsController` or `MerachProprietaryController`.
-- **Workout engine:** workout = list of segments (duration + target resistance or watts); timer drives setpoints.
-- **UI:** live ride screen (cadence, power, current/next segment, time remaining) + workout picker.
+## Architecture (as built)
+- **BLE:** `BleConnection` (one GATT link, serialized op queue) owned by the app-wide `BikeSession` (scan, FTMS handshake, auto-reconnect, level commands, log). `RideService` is a foreground service that keeps the process alive.
+- **Protocol:** pure Kotlin in `protocol/` (command bytes, data parser, unit detection, bike-button change detection). `BikeController` is the interface the workout engine uses; FTMS is the only implementation.
+- **Workouts:** a workout is a list of segments (duration + level, optionally ramping to `endLevel`). `WorkoutEngine` ticks every second and sends a level whenever `Workout.levelAt` changes. Custom workouts are saved to `workouts.json`.
+- **History:** `RideTracker` starts a ride at the first pedal stroke and saves a `RideRecord` (via the pure `RideRecorder`) to `rides.json` on Finish, Disconnect, or 3 min disconnected.
+- **UI:** Compose, three tabs (Ride / Workouts / History) in `MainScreen`, no navigation library.
 
 ## Open Questions
-- Which GATT services does the S29 Aura expose?
-- Does it support resistance-level control, power (ERG) control, or both?
-- Can the built-in screen and a phone be connected at the same time?
-- Does the bike report power, or only cadence/speed/resistance?
+Answered by discovery: the S29 exposes FTMS (`0x1826`) plus a proprietary "MERACH" service; it takes resistance level only (no ERG); the built-in screen doesn't block the phone; it reports power. Still open:
+- How the bike behaves when it sleeps mid-ride (does the link drop, do its distance/kcal counters reset?).
+- The cause of the one-off jump to level 16 seen during Quick Test.
+- Whether app-side ERG (adjusting levels to hold a target wattage) is responsive enough with whole levels only.
 
 ## Environment / Tools
 - Android phone with nRF Connect
@@ -89,3 +90,5 @@ Build, install and the first bike tests are done (see Log). Remaining:
   - Workouts tab: custom workouts (create, edit, copy, delete) saved to `workouts.json`.
   - History tab: rides saved to `rides.json` with totals. A ride starts at the first pedal stroke while connected; it ends on **Finish ride**, on Disconnect, or after 3 min disconnected. Rides under 1 min aren't saved. Distance and kcal come from the bike's running totals, summing increases and treating a drop as a counter restart (`history/RideRecorder`).
   - JSON is handled by `data/MiniJson` (no new dependency). Edits to `build.gradle.kts` from the agent time out, so avoid build file changes where possible.
+- 2026-11-14 — Added built-in **8 / 12 Ramps** workout (user request) and **ramp segments**: a segment can step steadily from `level` to `endLevel`, one level at a time, with equal time per level (`Segment.levelAt`). The editor has a "Ramp to another level" switch. 63 unit tests pass; not yet ridden.
+- 2026-11-14 — User added a TODO: web workout builder (see Next Steps). Updated README.md, MerachRide/README.md, CLAUDE.md and this file to match the current app.
