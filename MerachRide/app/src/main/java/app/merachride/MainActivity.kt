@@ -7,7 +7,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import app.merachride.ui.MerachRideTheme
 import app.merachride.ui.PermissionGate
-import app.merachride.ui.RideScreen
+import app.merachride.ui.MainScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -20,7 +20,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             MerachRideTheme {
                 PermissionGate {
-                    RideScreen(session)
+                    MainScreen(session)
                 }
             }
         }

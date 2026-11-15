@@ -6,19 +6,52 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -26,42 +59,84 @@ import app.merachride.BikeSession
 import app.merachride.ConnState
 import app.merachride.protocol.BikeData
 import app.merachride.protocol.FtmsProtocol
-import app.merachride.workout.SampleWorkouts
 import app.merachride.workout.Workout
 import app.merachride.workout.WorkoutEngine
 import app.merachride.workout.WorkoutState
 import kotlin.math.roundToInt
 
+/**
+ * The screen used while riding: everything fits without scrolling, the most important numbers
+ * are the biggest, and in landscape the live stats and the workout sit side by side.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RideScreen(session: BikeSession) {
+fun RideScreen(
+    session: BikeSession,
+    onChooseWorkout: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val state by session.state.collectAsStateWithLifecycle()
     val data by session.data.collectAsStateWithLifecycle()
     val target by session.targetLevel.collectAsStateWithLifecycle()
     val log by session.logLines.collectAsStateWithLifecycle()
     val workout by session.workout.state.collectAsStateWithLifecycle()
+    var showLog by rememberSaveable { mutableStateOf(false) }
 
-    Scaffold { padding ->
-        Column(
-            Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            Header(state, onDisconnect = session::disconnect)
-            if (state is ConnState.Idle) {
-                DevicePicker(session)
-            } else {
-                Metrics(data)
-                LevelControl(
+    Column(
+        modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Header(state, onShowLog = { showLog = true }, onDisconnect = session::disconnect)
+        if (state is ConnState.Idle) {
+            Column(
+                Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState()),
+            ) { DevicePicker(session) }
+        } else {
+            val live: @Composable (Modifier) -> Unit = { m ->
+                LiveStats(
+                    data = data,
                     target = target,
-                    enabled = state is ConnState.Ready,
-                    onChange = session::changeLevel,
+                    levelEnabled = state is ConnState.Ready,
+                    onChangeLevel = session::changeLevel,
+                    modifier = m,
                 )
-                WorkoutPanel(workout, session.workout)
             }
-            EventLog(log)
+            val workoutArea: @Composable (Modifier) -> Unit = { m ->
+                WorkoutArea(workout, session.workout, onChooseWorkout, m)
+            }
+            val config = LocalConfiguration.current
+            if (config.screenWidthDp > config.screenHeightDp) {
+                Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    live(Modifier.weight(1f))
+                    workoutArea(Modifier.weight(1f).fillMaxHeight())
+                }
+            } else {
+                live(Modifier.fillMaxWidth())
+                workoutArea(Modifier.fillMaxWidth().weight(1f))
+            }
+        }
+    }
+
+    if (showLog) {
+        ModalBottomSheet(onDismissRequest = { showLog = false }) {
+            Text(
+                "Connection log",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+            LazyColumn(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+            ) {
+                items(log) { line ->
+                    Text(line, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
+                }
+            }
         }
     }
 }
@@ -69,10 +144,10 @@ fun RideScreen(session: BikeSession) {
 // ------------------------------------------------------------------ header
 
 @Composable
-private fun Header(state: ConnState, onDisconnect: () -> Unit) {
+private fun Header(state: ConnState, onShowLog: () -> Unit, onDisconnect: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            Text("Merach Ride", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Text("Merach Ride", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             val (text, color) = when (state) {
                 ConnState.Idle ->
                     "Not connected" to MaterialTheme.colorScheme.onSurfaceVariant
@@ -82,10 +157,13 @@ private fun Header(state: ConnState, onDisconnect: () -> Unit) {
                 is ConnState.Ready ->
                     "Connected · ${state.name ?: "bike"}" to MaterialTheme.colorScheme.primary
             }
-            Text(text, color = color, style = MaterialTheme.typography.bodyMedium)
+            Text(text, color = color, style = MaterialTheme.typography.bodySmall)
+        }
+        IconButton(onClick = onShowLog) {
+            Icon(Icons.Outlined.Info, contentDescription = "Connection log")
         }
         if (state !is ConnState.Idle) {
-            OutlinedButton(onClick = onDisconnect) { Text("Disconnect") }
+            TextButton(onClick = onDisconnect) { Text("Disconnect") }
         }
     }
 }
@@ -167,41 +245,41 @@ private fun DevicePicker(session: BikeSession) {
 // ------------------------------------------------------------------ live data
 
 @Composable
-private fun Metrics(d: BikeData) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+private fun LiveStats(
+    data: BikeData,
+    target: Int?,
+    levelEnabled: Boolean,
+    onChangeLevel: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Metric("Power", d.powerW?.toString(), "W", Modifier.weight(1f), big = true)
-            Metric("Cadence", d.cadenceRpm?.roundToInt()?.toString(), "rpm", Modifier.weight(1f), big = true)
-            Metric("Bike level", d.resistanceLevel?.toString(), "", Modifier.weight(1f), big = true)
+            BigMetric("Power", data.powerW?.toString(), "W", Modifier.weight(1f))
+            BigMetric("Cadence", data.cadenceRpm?.roundToInt()?.toString(), "rpm", Modifier.weight(1f))
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Metric("Speed", d.speedKmh?.let { "%.1f".format(it) }, "km/h", Modifier.weight(1f))
-            Metric("Heart rate", d.heartRateBpm?.takeIf { it > 0 }?.toString(), "bpm", Modifier.weight(1f))
-            Metric("Energy", d.totalEnergyKcal?.toString(), "kcal", Modifier.weight(1f))
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Metric("Distance", d.totalDistanceM?.let { "%.2f".format(it / 1000.0) }, "km", Modifier.weight(1f))
-            Metric("Bike time", d.elapsedTimeS?.let(::formatTime), "", Modifier.weight(1f))
+        LevelControl(target, levelEnabled, onChangeLevel)
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            SmallMetric("km/h", data.speedKmh?.let { "%.1f".format(it) }, Modifier.weight(1f))
+            SmallMetric("bpm", data.heartRateBpm?.takeIf { it > 0 }?.toString(), Modifier.weight(1f))
+            SmallMetric("kcal", data.totalEnergyKcal?.toString(), Modifier.weight(1f))
+            SmallMetric("km", data.totalDistanceM?.let { "%.2f".format(it / 1000.0) }, Modifier.weight(1f))
+            SmallMetric("time", data.elapsedTimeS?.let(::formatTime), Modifier.weight(1f))
         }
     }
 }
 
 @Composable
-private fun Metric(label: String, value: String?, unit: String, modifier: Modifier = Modifier, big: Boolean = false) {
-    Surface(modifier, shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
-        Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
-            Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+private fun BigMetric(label: String, value: String?, unit: String, modifier: Modifier = Modifier) {
+    Surface(modifier, shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+            Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(verticalAlignment = Alignment.Bottom) {
-                Text(
-                    value ?: "–",
-                    style = if (big) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                if (unit.isNotEmpty() && value != null) {
+                Text(value ?: "–", fontSize = 48.sp, fontWeight = FontWeight.Bold, lineHeight = 52.sp)
+                if (value != null) {
                     Text(
                         " $unit",
-                        style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier.padding(bottom = 4.dp),
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(bottom = 8.dp),
                     )
                 }
             }
@@ -209,15 +287,32 @@ private fun Metric(label: String, value: String?, unit: String, modifier: Modifi
     }
 }
 
-// ------------------------------------------------------------------ manual level
+@Composable
+private fun SmallMetric(unit: String, value: String?, modifier: Modifier = Modifier) {
+    Surface(modifier, shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+        Column(
+            Modifier.padding(vertical = 6.dp, horizontal = 4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                value ?: "–",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Clip,
+            )
+            Text(unit, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
 
 @Composable
 private fun LevelControl(target: Int?, enabled: Boolean, onChange: (Int) -> Unit) {
-    Card(Modifier.fillMaxWidth()) {
+    Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.primaryContainer) {
         Row(
             Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
@@ -226,15 +321,11 @@ private fun LevelControl(target: Int?, enabled: Boolean, onChange: (Int) -> Unit
                 enabled = enabled && (target ?: Int.MAX_VALUE) > FtmsProtocol.MIN_LEVEL,
                 modifier = Modifier.size(72.dp),
                 contentPadding = PaddingValues(0.dp),
-            ) { Text("−", fontSize = 32.sp) }
+            ) { Text("−", fontSize = 36.sp) }
 
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("Resistance", style = MaterialTheme.typography.labelLarge)
-                Text(
-                    target?.toString() ?: "–",
-                    style = MaterialTheme.typography.displayMedium,
-                    fontWeight = FontWeight.Bold,
-                )
+                Text("Level", style = MaterialTheme.typography.labelLarge)
+                Text(target?.toString() ?: "–", fontSize = 56.sp, fontWeight = FontWeight.Bold, lineHeight = 60.sp)
                 Text("of ${FtmsProtocol.MAX_LEVEL}", style = MaterialTheme.typography.bodySmall)
             }
 
@@ -243,112 +334,98 @@ private fun LevelControl(target: Int?, enabled: Boolean, onChange: (Int) -> Unit
                 enabled = enabled && (target ?: Int.MIN_VALUE) < FtmsProtocol.MAX_LEVEL,
                 modifier = Modifier.size(72.dp),
                 contentPadding = PaddingValues(0.dp),
-            ) { Text("+", fontSize = 32.sp) }
+            ) { Text("+", fontSize = 36.sp) }
         }
     }
 }
 
-// ------------------------------------------------------------------ workouts
+// ------------------------------------------------------------------ workout
 
 @Composable
-private fun WorkoutPanel(ws: WorkoutState, engine: WorkoutEngine) {
+private fun WorkoutArea(ws: WorkoutState, engine: WorkoutEngine, onChoose: () -> Unit, modifier: Modifier) {
     val w = ws.workout
-    if (w == null) {
-        WorkoutPicker(onPick = engine::load)
-    } else {
-        ActiveWorkout(ws, w, engine)
-    }
-}
-
-@Composable
-private fun WorkoutPicker(onPick: (Workout) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Workouts", style = MaterialTheme.typography.titleMedium)
-        SampleWorkouts.all.forEach { wk ->
-            Card(
+    Card(modifier) {
+        if (w == null) {
+            Column(
                 Modifier
-                    .fillMaxWidth()
-                    .clickable { onPick(wk) },
+                    .fillMaxSize()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row {
-                        Text(wk.name, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-                        Text(formatTime(wk.totalSec), style = MaterialTheme.typography.bodyMedium)
-                    }
-                    WorkoutProfile(
-                        wk,
-                        progress = null,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(36.dp),
-                    )
-                }
+                Text("Free ride", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Set the level yourself, or pick a workout to have the app change it for you.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Button(onClick = onChoose) { Text("Choose a workout") }
             }
+        } else {
+            ActiveWorkout(ws, w, engine)
         }
     }
 }
 
 @Composable
 private fun ActiveWorkout(ws: WorkoutState, w: Workout, engine: WorkoutEngine) {
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(w.name, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                Text("${formatTime(ws.elapsedSec)} / ${formatTime(w.totalSec)}", style = MaterialTheme.typography.bodyMedium)
-            }
-            WorkoutProfile(
-                w,
-                progress = ws.progress,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
+    Column(
+        Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                w.name,
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
+            Text("${formatTime(ws.totalRemainingSec)} left", style = MaterialTheme.typography.bodyMedium)
+        }
 
-            val seg = ws.currentSegment
-            if (ws.finished) {
-                Text("Workout complete. Nice work!", style = MaterialTheme.typography.titleMedium)
-            } else if (seg != null) {
-                Text(
-                    "Segment ${ws.segmentIndex + 1} of ${w.segments.size}: ${seg.label} · level ${seg.level}",
-                    style = MaterialTheme.typography.titleSmall,
-                )
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Text(
-                        formatTime(ws.segmentRemainingSec),
-                        style = MaterialTheme.typography.displaySmall,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Text(
-                        "  left in segment",
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(bottom = 6.dp),
-                    )
-                }
-                ws.nextSegment?.let { next ->
-                    Text(
-                        "Next: ${next.label} · level ${next.level} · ${formatTime(next.durationSec)}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
+        val seg = ws.currentSegment
+        if (ws.finished) {
+            Text("Workout complete. Nice work!", style = MaterialTheme.typography.titleLarge)
+        } else if (seg != null) {
+            Text(
+                "${ws.segmentIndex + 1}/${w.segments.size} · ${seg.label.ifBlank { "Segment" }} · level ${seg.level}",
+                style = MaterialTheme.typography.titleSmall,
+            )
+            Text(formatTime(ws.segmentRemainingSec), fontSize = 44.sp, fontWeight = FontWeight.Bold, lineHeight = 48.sp)
+            Text(
+                ws.nextSegment?.let { "Next: ${it.label.ifBlank { "Segment" }} · level ${it.level} · ${formatTime(it.durationSec)}" }
+                    ?: "Last segment",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                when {
-                    ws.finished -> Button(onClick = engine::start) { Text("Restart") }
-                    ws.running -> Button(onClick = engine::pause) { Text("Pause") }
-                    else -> Button(onClick = engine::start) { Text(if (ws.elapsedSec > 0) "Resume" else "Start") }
-                }
-                OutlinedButton(onClick = engine::skip, enabled = !ws.finished) { Text("Skip") }
-                TextButton(onClick = engine::unload) { Text("End") }
+        WorkoutProfile(
+            w,
+            progress = ws.progress,
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+        )
+        Spacer(Modifier.height(4.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            when {
+                ws.finished -> Button(onClick = engine::start) { Text("Restart") }
+                ws.running -> Button(onClick = engine::pause) { Text("Pause") }
+                else -> Button(onClick = engine::start) { Text(if (ws.elapsedSec > 0) "Resume" else "Start") }
             }
+            OutlinedButton(onClick = engine::skip, enabled = !ws.finished) { Text("Skip") }
+            TextButton(onClick = engine::unload) { Text("End") }
         }
     }
 }
 
 /** Bar chart of a workout's levels, with completed segments drawn solid and a "now" marker. */
 @Composable
-private fun WorkoutProfile(w: Workout, progress: Float?, modifier: Modifier = Modifier) {
+fun WorkoutProfile(w: Workout, progress: Float?, modifier: Modifier = Modifier) {
     val bar = MaterialTheme.colorScheme.primary
     val marker = MaterialTheme.colorScheme.onSurface
     Canvas(modifier) {
@@ -373,23 +450,6 @@ private fun WorkoutProfile(w: Workout, progress: Float?, modifier: Modifier = Mo
         if (progress != null) {
             val px = size.width * progress
             drawLine(marker, Offset(px, 0f), Offset(px, size.height), strokeWidth = 2.dp.toPx())
-        }
-    }
-}
-
-// ------------------------------------------------------------------ log
-
-@Composable
-private fun EventLog(lines: List<String>) {
-    var expanded by rememberSaveable { mutableStateOf(false) }
-    Column {
-        TextButton(onClick = { expanded = !expanded }) {
-            Text(if (expanded) "Hide connection log" else "Show connection log (${lines.size})")
-        }
-        if (expanded) {
-            lines.take(40).forEach {
-                Text(it, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
-            }
         }
     }
 }
