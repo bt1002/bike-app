@@ -39,7 +39,10 @@ Unit tests: right-click `app/src/test` → **Run Tests**, or Gradle task `app:te
      replaces workouts with the same id and adds the rest.
 6. A ride is recorded automatically from your first pedal stroke. Tap **Finish ride** (or disconnect) to
    save it to the **History** tab. Rides under a minute aren't saved.
-7. The ⓘ icon at the top of the Ride tab opens the connection log. Check it first if something misbehaves.
+7. Heart rate: tap ♡ at the top of the Ride tab to connect a heart rate monitor. A **Pixel Watch** works:
+   on the watch, turn on quick settings → **Connected Fitness** (or Settings → Connectivity → Share Heart
+   Rate), then scan, or pick the watch under "Paired with this phone". Chest straps work too.
+8. The ⓘ icon at the top of the Ride tab opens the connection log. Check it first if something misbehaves.
 
 The connection stays up with the screen off (via a foreground notification) and reconnects automatically
 if the link drops, re-applying the last level. A running workout pauses while the link is down and resumes
