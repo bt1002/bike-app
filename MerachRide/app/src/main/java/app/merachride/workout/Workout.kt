@@ -7,7 +7,8 @@ data class Segment(val durationSec: Int, val level: Int, val label: String = "")
     }
 }
 
-data class Workout(val name: String, val segments: List<Segment>) {
+/** [id] is blank for built-in workouts and a UUID for ones the user made. */
+data class Workout(val name: String, val segments: List<Segment>, val id: String = "") {
     init {
         require(segments.isNotEmpty()) { "workout needs at least one segment" }
     }

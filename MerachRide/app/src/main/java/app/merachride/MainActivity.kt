@@ -16,11 +16,11 @@ class MainActivity : ComponentActivity() {
         // Keep the screen on while the app is open, so the ride stats stay visible.
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
-        val session = (application as MerachRideApp).session
+        val app = application as MerachRideApp
         setContent {
             MerachRideTheme {
                 PermissionGate {
-                    MainScreen(session)
+                    MainScreen(app.session, app.customWorkouts)
                 }
             }
         }

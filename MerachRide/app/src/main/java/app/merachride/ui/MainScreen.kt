@@ -17,6 +17,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import app.merachride.BikeSession
+import app.merachride.data.JsonFileStore
+import app.merachride.workout.Workout
 
 private enum class Tab(val label: String, val icon: ImageVector) {
     Ride("Ride", Icons.Filled.PlayArrow),
@@ -25,7 +27,7 @@ private enum class Tab(val label: String, val icon: ImageVector) {
 
 /** App shell: bottom navigation between the ride, workout and history screens. */
 @Composable
-fun MainScreen(session: BikeSession) {
+fun MainScreen(session: BikeSession, customWorkouts: JsonFileStore<Workout>) {
     var tab by rememberSaveable { mutableStateOf(Tab.Ride) }
 
     Scaffold(
@@ -46,6 +48,7 @@ fun MainScreen(session: BikeSession) {
         when (tab) {
             Tab.Ride -> RideScreen(session, onChooseWorkout = { tab = Tab.Workouts }, modifier = m)
             Tab.Workouts -> WorkoutsScreen(
+                store = customWorkouts,
                 onPick = { w ->
                     session.workout.load(w)
                     tab = Tab.Ride
