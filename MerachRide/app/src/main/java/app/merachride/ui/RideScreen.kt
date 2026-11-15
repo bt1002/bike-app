@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -57,6 +58,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.merachride.BikeSession
 import app.merachride.ConnState
+import app.merachride.history.RideProgress
+import app.merachride.history.RideTracker
 import app.merachride.protocol.BikeData
 import app.merachride.protocol.FtmsProtocol
 import app.merachride.workout.Workout
@@ -72,6 +75,7 @@ import kotlin.math.roundToInt
 @Composable
 fun RideScreen(
     session: BikeSession,
+    tracker: RideTracker,
     onChooseWorkout: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -80,6 +84,7 @@ fun RideScreen(
     val target by session.targetLevel.collectAsStateWithLifecycle()
     val log by session.logLines.collectAsStateWithLifecycle()
     val workout by session.workout.state.collectAsStateWithLifecycle()
+    val ride by tracker.current.collectAsStateWithLifecycle()
     var showLog by rememberSaveable { mutableStateOf(false) }
 
     Column(
@@ -111,11 +116,15 @@ fun RideScreen(
             val config = LocalConfiguration.current
             if (config.screenWidthDp > config.screenHeightDp) {
                 Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    live(Modifier.weight(1f))
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        live(Modifier.fillMaxWidth())
+                        RideBar(ride, onFinish = tracker::finish)
+                    }
                     workoutArea(Modifier.weight(1f).fillMaxHeight())
                 }
             } else {
                 live(Modifier.fillMaxWidth())
+                RideBar(ride, onFinish = tracker::finish)
                 workoutArea(Modifier.fillMaxWidth().weight(1f))
             }
         }
@@ -336,6 +345,47 @@ private fun LevelControl(target: Int?, enabled: Boolean, onChange: (Int) -> Unit
                 contentPadding = PaddingValues(0.dp),
             ) { Text("+", fontSize = 36.sp) }
         }
+    }
+}
+
+// ------------------------------------------------------------------ ride
+
+@Composable
+private fun RideBar(ride: RideProgress?, onFinish: () -> Unit) {
+    var confirm by remember { mutableStateOf(false) }
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        if (ride == null) {
+            Text(
+                "Start pedalling to begin recording a ride",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            Text(
+                "Ride ${formatTime(ride.elapsedSec)} · ${"%.2f".format(ride.distanceM / 1000.0)} km · ${ride.energyKcal} kcal",
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.weight(1f),
+            )
+            OutlinedButton(onClick = { confirm = true }) { Text("Finish ride") }
+        }
+    }
+    if (confirm && ride != null) {
+        AlertDialog(
+            onDismissRequest = { confirm = false },
+            title = { Text("Finish this ride?") },
+            text = {
+                Text(
+                    if (ride.elapsedSec >= 60) "It will be saved to History." else "Rides under a minute aren't saved.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirm = false
+                    onFinish()
+                }) { Text("Finish") }
+            },
+            dismissButton = { TextButton(onClick = { confirm = false }) { Text("Keep riding") } },
+        )
     }
 }
 

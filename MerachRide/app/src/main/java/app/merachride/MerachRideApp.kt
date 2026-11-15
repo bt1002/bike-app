@@ -2,6 +2,9 @@ package app.merachride
 
 import android.app.Application
 import app.merachride.data.JsonFileStore
+import app.merachride.history.RideCodec
+import app.merachride.history.RideRecord
+import app.merachride.history.RideTracker
 import app.merachride.workout.Workout
 import app.merachride.workout.WorkoutCodec
 import kotlinx.coroutines.CoroutineScope
@@ -18,6 +21,13 @@ class MerachRideApp : Application() {
     lateinit var customWorkouts: JsonFileStore<Workout>
         private set
 
+    /** Saved rides, newest first. */
+    lateinit var rideHistory: JsonFileStore<RideRecord>
+        private set
+
+    lateinit var rideTracker: RideTracker
+        private set
+
     override fun onCreate() {
         super.onCreate()
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -28,5 +38,12 @@ class MerachRideApp : Application() {
             WorkoutCodec::encode,
             WorkoutCodec::decode,
         )
+        rideHistory = JsonFileStore(
+            File(filesDir, "rides.json"),
+            scope,
+            RideCodec::encode,
+            RideCodec::decode,
+        )
+        rideTracker = RideTracker(scope, session, rideHistory)
     }
 }

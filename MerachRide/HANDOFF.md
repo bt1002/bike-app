@@ -3,7 +3,7 @@
 Location: `MerachRide/HANDOFF.md` (moved from the repo root 2026-11-14 so it sits in the folder opened in Android Studio).
 
 ## Status
-**Phase:** On-bike testing. Android Studio is installed on the primary dev PC (Gradle JDK 23). As of 2026-11-14 the project compiles, all **31 unit tests pass**, and the app runs on the phone (installed over Wireless debugging). On-bike results are in the Log.
+**Phase:** UI features. Android Studio is installed on the primary dev PC (Gradle JDK 23). As of 2026-11-14 the project compiles, all **54 unit tests pass**, and the app runs on the phone (installed over Wireless debugging). The app has Ride / Workouts / History tabs, custom workouts and ride history; these haven't been tried on the bike yet. Still to test on the bike: sleep/reconnect (step 5 in Next Steps).
 **Protocol:** Standard FTMS. Resistance-level control only (1–16; write `04 <level*10>`). No power target (no native ERG). Bike reports power, cadence, HR, etc. via `0x2AD2`.
 **Blocking item:** None.
 **Uncommitted work:** None. Local `main` is ahead of `origin/main` (not pushed).
@@ -86,3 +86,8 @@ Discovery is done (see Log), so these steps start at the first build.
 - 2026-11-14 — **First build succeeded with no code changes.** `:app:compileDebugKotlin`, `:app:testDebugUnitTest` (24 passed, 0 failed) and `:app:assembleDebug` all pass. Next: commit, install on the phone, then test on the bike.
 - 2026-11-14 — **First on-bike test (verified by user):** permissions, connect, and manual −/+ across 1–16 all work; bike display matches the app. Quick Test runs. Problems: (a) once, during the last segment (level 1) at ~1:45, the felt resistance jumped to 16. The app log only shows `Level 16` then `Level 1`, so the cause is unknown; parked for now. (b) Changing the level with the bike's buttons isn't reflected in the app. The "Bike reports resistance in …" line wasn't captured, so the `0x2AD2` units are still unverified. Fix (unverified): new `protocol/ManualChangeDetector` makes the app's target follow a level change reported by the bike (ignoring reports within 3 s of an app command); every change in the raw resistance value is now logged.
 - 2026-11-14 — **Verified on the bike:** `0x2AD2` reports resistance in **whole levels** (log: `Bike resistance raw 14 (level 14)`, `raw 11 (level 11)`, `raw 1 (level 1)`). The app's level now tracks changes from both the app and the bike's buttons. Still open: the one-off jump to 16 during the last Quick Test segment (parked), and sleep/reconnect (step 5, not yet tested).
+- 2026-11-14 — **UI work (builds, 54 tests pass, installed on the phone; not yet tried on the bike):**
+  - Ride tab fits without scrolling (big power/cadence/level, compact stats row, workout card, landscape side by side); log is in a bottom sheet behind the ⓘ icon.
+  - Workouts tab: custom workouts (create, edit, copy, delete) saved to `workouts.json`.
+  - History tab: rides saved to `rides.json` with totals. A ride starts at the first pedal stroke while connected; it ends on **Finish ride**, on Disconnect, or after 3 min disconnected. Rides under 1 min aren't saved. Distance and kcal come from the bike's running totals, summing increases and treating a drop as a counter restart (`history/RideRecorder`).
+  - JSON is handled by `data/MiniJson` (no new dependency). Edits to `build.gradle.kts` from the agent time out, so avoid build file changes where possible.

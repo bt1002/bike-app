@@ -20,7 +20,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             MerachRideTheme {
                 PermissionGate {
-                    MainScreen(app.session, app.customWorkouts)
+                    MainScreen(app)
                 }
             }
         }
