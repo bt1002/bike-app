@@ -40,6 +40,9 @@ Read `MerachRide/HANDOFF.md` first. It has the current status, the discovery log
 - `ble/BleConnection.kt`: one GATT connection with a serialized operation queue (one op in flight).
 - `BikeSession.kt`: app-wide singleton. Handles scan, connect, the FTMS handshake, auto-reconnect,
   resistance commands and the in-app log.
+- `HeartRateMonitor.kt`: optional second BLE link to a standard heart rate monitor (`0x180D`), e.g. the user's
+  Pixel Watch via Connected Fitness. Its bpm overrides the bike's in the UI and in recorded rides.
+  Parser in `protocol/HeartRate.kt`.
 - `workout/`: model (segments hold a level or ramp via `endLevel`), engine (1 s ticker on the Main dispatcher;
   sends a level whenever `Workout.levelAt` changes), built-in workouts, editor draft (`WorkoutDraft`),
   `WorkoutCodec` (`workouts.json`) and `WorkoutImport` (merge an imported file by id).

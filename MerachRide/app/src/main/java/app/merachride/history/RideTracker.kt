@@ -3,6 +3,7 @@ package app.merachride.history
 import android.os.SystemClock
 import app.merachride.BikeSession
 import app.merachride.ConnState
+import app.merachride.HeartRateMonitor
 import app.merachride.data.JsonFileStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -27,6 +28,7 @@ data class RideProgress(val elapsedSec: Int, val distanceM: Int, val energyKcal:
 class RideTracker(
     scope: CoroutineScope,
     private val session: BikeSession,
+    private val heartRate: HeartRateMonitor,
     private val history: JsonFileStore<RideRecord>,
 ) {
     private val _current = MutableStateFlow<RideProgress?>(null)
@@ -47,7 +49,8 @@ class RideTracker(
 
     private fun tick() {
         val state = session.state.value
-        val data = session.data.value
+        // A separate heart rate monitor wins over the bike's own reading (the S29 reports none without a strap).
+        val data = session.data.value.let { d -> heartRate.bpm.value?.let { d.copy(heartRateBpm = it) } ?: d }
         val r = recorder
 
         when {

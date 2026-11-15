@@ -28,10 +28,15 @@ class MerachRideApp : Application() {
     lateinit var rideTracker: RideTracker
         private set
 
+    /** Optional heart rate monitor (chest strap or a watch app that broadcasts heart rate). */
+    lateinit var heartRate: HeartRateMonitor
+        private set
+
     override fun onCreate() {
         super.onCreate()
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         session = BikeSession(this, scope)
+        heartRate = HeartRateMonitor(this, scope, session::log)
         customWorkouts = JsonFileStore(
             File(filesDir, "workouts.json"),
             scope,
@@ -44,6 +49,6 @@ class MerachRideApp : Application() {
             RideCodec::encode,
             RideCodec::decode,
         )
-        rideTracker = RideTracker(scope, session, rideHistory)
+        rideTracker = RideTracker(scope, session, heartRate, rideHistory)
     }
 }

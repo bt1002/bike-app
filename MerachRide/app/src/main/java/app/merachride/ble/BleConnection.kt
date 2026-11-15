@@ -32,6 +32,8 @@ import java.util.UUID
 @SuppressLint("MissingPermission") // The UI only gets here after BLUETOOTH_CONNECT is granted.
 class BleConnection(
     private val context: Context,
+    /** The service the device must have (FTMS for the bike, Heart Rate for a monitor). */
+    private val requiredService: UUID,
     private val log: (String) -> Unit,
 ) {
     class Notification(val uuid: UUID, val value: ByteArray)
@@ -72,9 +74,9 @@ class BleConnection(
         }
 
         override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
-            val hasFtms = g.getService(FtmsUuids.SERVICE) != null
-            val ok = status == BluetoothGatt.GATT_SUCCESS && hasFtms
-            if (!ok) log("Service discovery failed (status $status, FTMS present: $hasFtms)")
+            val hasService = g.getService(requiredService) != null
+            val ok = status == BluetoothGatt.GATT_SUCCESS && hasService
+            if (!ok) log("Service discovery failed (status $status, ${short(requiredService)} present: $hasService)")
             _connected.value = ok
             discovery?.complete(ok)
         }
@@ -102,7 +104,7 @@ class BleConnection(
         }
     }
 
-    /** Connects and discovers services. Returns true if the FTMS service is available. */
+    /** Connects and discovers services. Returns true if [requiredService] is available. */
     suspend fun connect(device: BluetoothDevice, timeoutMs: Long = 15_000): Boolean {
         disconnect()
         val result = CompletableDeferred<Boolean>()

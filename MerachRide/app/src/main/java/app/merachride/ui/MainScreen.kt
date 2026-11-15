@@ -49,6 +49,7 @@ fun MainScreen(app: MerachRideApp) {
             Tab.Ride -> RideScreen(
                 session = app.session,
                 tracker = app.rideTracker,
+                heartRate = app.heartRate,
                 onChooseWorkout = { tab = Tab.Workouts },
                 modifier = m,
             )

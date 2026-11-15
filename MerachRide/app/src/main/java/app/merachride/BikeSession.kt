@@ -66,7 +66,7 @@ class BikeSession(
     private val adapter: BluetoothAdapter? =
         app.getSystemService(BluetoothManager::class.java)?.adapter
     private val prefs = app.getSharedPreferences("bike", Context.MODE_PRIVATE)
-    private val conn = BleConnection(app) { message -> log(message) }
+    private val conn = BleConnection(app, FtmsUuids.SERVICE) { message -> log(message) }
 
     private val _state = MutableStateFlow<ConnState>(ConnState.Idle)
     val state: StateFlow<ConnState> = _state.asStateFlow()

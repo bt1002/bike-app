@@ -23,6 +23,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -58,6 +60,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.merachride.BikeSession
 import app.merachride.ConnState
+import app.merachride.HeartRateMonitor
 import app.merachride.history.RideProgress
 import app.merachride.history.RideTracker
 import app.merachride.protocol.BikeData
@@ -76,6 +79,7 @@ import kotlin.math.roundToInt
 fun RideScreen(
     session: BikeSession,
     tracker: RideTracker,
+    heartRate: HeartRateMonitor,
     onChooseWorkout: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -85,7 +89,10 @@ fun RideScreen(
     val log by session.logLines.collectAsStateWithLifecycle()
     val workout by session.workout.state.collectAsStateWithLifecycle()
     val ride by tracker.current.collectAsStateWithLifecycle()
+    val hrState by heartRate.state.collectAsStateWithLifecycle()
+    val hrBpm by heartRate.bpm.collectAsStateWithLifecycle()
     var showLog by rememberSaveable { mutableStateOf(false) }
+    var showHeartRate by rememberSaveable { mutableStateOf(false) }
 
     Column(
         modifier
@@ -93,7 +100,13 @@ fun RideScreen(
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Header(state, onShowLog = { showLog = true }, onDisconnect = session::disconnect)
+        Header(
+            state,
+            hrState = hrState,
+            onShowHeartRate = { showHeartRate = true },
+            onShowLog = { showLog = true },
+            onDisconnect = session::disconnect,
+        )
         if (state is ConnState.Idle) {
             Column(
                 Modifier
@@ -103,7 +116,8 @@ fun RideScreen(
         } else {
             val live: @Composable (Modifier) -> Unit = { m ->
                 LiveStats(
-                    data = data,
+                    // A separate heart rate monitor wins over the bike's own reading.
+                    data = hrBpm?.let { data.copy(heartRateBpm = it) } ?: data,
                     target = target,
                     levelEnabled = state is ConnState.Ready,
                     onChangeLevel = session::changeLevel,
@@ -130,6 +144,15 @@ fun RideScreen(
         }
     }
 
+    if (showHeartRate) {
+        ModalBottomSheet(onDismissRequest = {
+            heartRate.stopScan()
+            showHeartRate = false
+        }) {
+            HeartRatePanel(heartRate)
+        }
+    }
+
     if (showLog) {
         ModalBottomSheet(onDismissRequest = { showLog = false }) {
             Text(
@@ -153,7 +176,13 @@ fun RideScreen(
 // ------------------------------------------------------------------ header
 
 @Composable
-private fun Header(state: ConnState, onShowLog: () -> Unit, onDisconnect: () -> Unit) {
+private fun Header(
+    state: ConnState,
+    hrState: HeartRateMonitor.State,
+    onShowHeartRate: () -> Unit,
+    onShowLog: () -> Unit,
+    onDisconnect: () -> Unit,
+) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text("Merach Ride", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -167,6 +196,14 @@ private fun Header(state: ConnState, onShowLog: () -> Unit, onDisconnect: () -> 
                     "Connected · ${state.name ?: "bike"}" to MaterialTheme.colorScheme.primary
             }
             Text(text, color = color, style = MaterialTheme.typography.bodySmall)
+        }
+        IconButton(onClick = onShowHeartRate) {
+            // Filled and coloured when a monitor is connected, outlined otherwise.
+            if (hrState is HeartRateMonitor.State.Connected) {
+                Icon(Icons.Filled.Favorite, contentDescription = "Heart rate monitor (connected)", tint = MaterialTheme.colorScheme.error)
+            } else {
+                Icon(Icons.Outlined.FavoriteBorder, contentDescription = "Heart rate monitor")
+            }
         }
         IconButton(onClick = onShowLog) {
             Icon(Icons.Outlined.Info, contentDescription = "Connection log")
