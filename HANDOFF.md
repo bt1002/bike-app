@@ -1,0 +1,77 @@
+# HANDOFF — merach-bike-app
+
+Suggested location: `projects/merach-bike-app/HANDOFF.md`
+
+## Status
+**Phase:** v0.1 code written in `MerachRide/` and **never compiled**: this PC has no Android tooling and no admin rights. Next: copy `MerachRide/` to a machine with Android Studio, build, fix compile errors, test on the bike.
+**Protocol:** Standard FTMS. Resistance-level control only (1–16; write `04 <level*10>`). No power target (no native ERG). Bike reports power, cadence, HR, etc. via `0x2AD2`.
+**Blocking item:** None.
+
+## Goal
+Native Android app that connects to a Merach S29 Aura exercise bike over Bluetooth LE and runs basic structured workouts by commanding the bike's resistance automatically.
+
+## Background / Problem
+- Third-party apps have trouble connecting to the bike and controlling resistance mid-workout.
+- Merach markets only its own app and FantomFite; no public protocol documentation found.
+- Anecdotal report: a related Merach auto-resistance bike connected to Kinomap, which hints at FTMS on some models. Not confirmed for the S29 Aura.
+- The S29 line has 16 resistance levels.
+
+## Hypotheses for third-party failures
+1. Single-connection limit: the Aura's built-in screen or the Merach app holds the BLE link.
+2. Client writes to the FTMS Control Point without first enabling indications, so writes are ignored.
+3. Bike uses a proprietary GATT service, not FTMS.
+
+## Next Steps
+1. **Probe the bike with nRF Connect (Android).**
+   - Close the Merach app and make sure the built-in screen isn't connected.
+   - Scan, connect, record all services/characteristics (screenshot or export).
+2. **Branch on result:**
+   - **FTMS present (`0x1826`)** → manually test control in nRF Connect (sequence below) before writing code.
+   - **Proprietary only** → capture Merach app traffic: Developer Options → Enable Bluetooth HCI snoop log → change resistance in Merach app → `adb bugreport` → decode `btsnoop_hci.log` in Wireshark. Map the command bytes for each resistance level.
+3. Scaffold the Android project around the confirmed protocol.
+
+## Reference: FTMS (if supported)
+| Characteristic | UUID | Use |
+|---|---|---|
+| Fitness Machine Feature | `0x2ACC` | Which control features are supported |
+| Indoor Bike Data | `0x2AD2` | Notify: cadence, speed, power, resistance |
+| Supported Resistance Range | `0x2AD6` | Min/max/step |
+| Supported Power Range | `0x2AD8` | For ERG mode, if present |
+| Fitness Machine Control Point | `0x2AD9` | Write commands; responses via indication |
+| Fitness Machine Status | `0x2ADA` | Notify: state changes |
+
+**Control sequence:**
+1. Enable indications on `0x2AD9` (CCCD = `0x0200`).
+2. Write `00` — Request Control. Expect response `80 00 01`.
+3. Write `07` — Start/Resume.
+4. Write `04 XX` — Set Target Resistance Level (uint8, 0.1 units; check `0x2AD6`).
+   or `05 LL HH` — Set Target Power in watts (sint16 LE), if supported.
+5. Subscribe to `0x2AD2` for live data.
+
+## Planned Architecture (Kotlin + Jetpack Compose)
+- **BLE layer:** foreground service owning the GATT connection; serialized write queue; auto-reconnect.
+- **Protocol layer:** `BikeController` interface → `FtmsController` or `MerachProprietaryController`.
+- **Workout engine:** workout = list of segments (duration + target resistance or watts); timer drives setpoints.
+- **UI:** live ride screen (cadence, power, current/next segment, time remaining) + workout picker.
+
+## Open Questions
+- Which GATT services does the S29 Aura expose?
+- Does it support resistance-level control, power (ERG) control, or both?
+- Can the built-in screen and a phone be connected at the same time?
+- Does the bike report power, or only cadence/speed/resistance?
+
+## Environment / Tools
+- Android phone with nRF Connect
+- Android Studio (Kotlin, Compose)
+- Wireshark + adb (only if proprietary protocol)
+
+## Log
+- 2026-11-14 — Project scoped. Protocol research done; no public spec found. Discovery plan and architecture drafted.
+- 2026-11-14 — nRF Connect scan: bike advertises as `MRK-S29C-307F`, MAC `E7:76:01:86:30:7F`, -55 dBm, not bonded. Advertised service UUIDs and GATT table not yet captured.
+- 2026-11-14 — GATT services captured: `0x1800`, `0x1801`, `0x180A`, **`0x1826` FTMS**, proprietary `59554c55-8000-6666-8888-4d4552414348` (tail = ASCII "MERACH"; fallback), `02f00000-0000-0000-0000-00000000fe00` (likely OTA/serial — do not write). **FTMS path chosen.** Next: read `0x2ACC` + `0x2AD6`, manual Control Point test, sample `0x2AD2`.
+- 2026-11-14 — FTMS characteristics confirmed: `2ACC` R, `2AD2` N, `2AD3` N/R, `2AD4` R, `2AD6` R, `2AD7` R, `2AD8` R (ERG may be possible), `2AD9` Indicate+Write, `2ADA` N. Values not yet read.
+- 2026-11-14 — Values read. `2ACC` measures: cadence, total distance, resistance level, energy, HR, elapsed time, **power**. Target settings: **resistance level ONLY** (no power target → no native ERG; possible app-side ERG via measured power). `2AD6`: 1.0–16.0 step 1.0 (raw 10–160 @ 0.1). `2AD8`: 0–999 W step 1. `2AD4`: 0–99 km/h. Next: Control Point write test (`00`, `07`, `04 50` = level 8 expected).
+- 2026-11-14 — **Manual FTMS control WORKS.** `00` → Request Control success (built-in screen does NOT block the link). `07` → Start/Resume success. `04 50` → bike display shows level **8** ⇒ standard FTMS encoding: uint8 = level × 10 (level N → `04 <N*10>`). Confirmed `04 A0` → 16 and `04 0A` → 1. **Discovery complete — protocol fully verified across full range.**
+- 2026-11-14 — Wrote `MerachRide/` Android project (Kotlin/Compose; AGP 8.7.3, Gradle 8.10.2, Kotlin 2.0.21, minSdk 26, targetSdk 35). Includes: BLE connection with serialized GATT queue, FTMS handshake (`00` → `07` → re-apply level), auto-reconnect with backoff, live data parser, manual ±level, workout engine plus 4 built-in workouts, foreground service, in-app connection log, JVM unit tests. No gradlew scripts (Studio doesn't need them). See `MerachRide/README.md`.
+  - Unverified on hardware: resistance units in `0x2AD2` (parser guesses), behavior when bike buttons change level, reconnect after bike sleeps.
+  - Ideas for later: app-side ERG (adjust level to hold target watts), custom workout editor, ride history and export.
