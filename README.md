@@ -31,7 +31,7 @@ Tested on the bike with nRF Connect (2026-11-14):
 | Path | Contents |
 |---|---|
 | [`MerachRide/`](MerachRide/) | Android Studio project (Kotlin + Jetpack Compose). See [its README](MerachRide/README.md) for build steps. |
-| [`HANDOFF.md`](HANDOFF.md) | Project status, discovery log, open questions and next steps |
+| [`MerachRide/HANDOFF.md`](MerachRide/HANDOFF.md) | Project status, discovery log, open questions and next steps |
 | [`screenshots/`](screenshots/) | nRF Connect captures of the bike's Bluetooth services |
 
 ## Quick start

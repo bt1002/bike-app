@@ -1,21 +1,20 @@
 # CLAUDE.md
 
 Android app (Kotlin + Jetpack Compose) that controls a Merach S29 Aura bike over Bluetooth LE using FTMS.
-Read `HANDOFF.md` first. It has the current status, the discovery log and the next steps.
+Read `MerachRide/HANDOFF.md` first. It has the current status, the discovery log and the next steps.
 
 ## Constraints
 
-- **The primary dev PC cannot build Android.** It has no Android Studio, SDK, JDK or adb, and no admin
-  rights to install them. Code written there is never compiled. The user builds on another machine and pastes
-  errors back. So:
-  - Don't claim code compiles or works. Say it's unverified.
-  - Prefer library versions you are sure exist over the newest ones. Current pins are AGP 8.7.3,
-    Gradle 8.10.2, Kotlin 2.0.21 and Compose BOM 2024.12.01.
+- **Build setup (since 2026-11-14):** Android Studio is installed on the primary dev PC, and the user now has
+  admin rights there. Gradle sync needs **Gradle JDK 23** (Settings → Build → Build Tools → Gradle).
+  The first successful build hasn't happened yet, so check the Status in `MerachRide/HANDOFF.md` before assuming anything compiles.
+  - Don't claim code compiles or works until it has actually been built or tested. Otherwise say it's unverified.
+  - Don't upgrade the pins casually: AGP 8.7.3, Gradle 8.10.2, Kotlin 2.0.21, Compose BOM 2024.12.01.
   - Check Kotlin precedence carefully: `a and b == c` parses as `a and (b == c)`. Parenthesize bit masks.
-  - Don't use pip, npm or similar installers on that PC. Use the built-in tools (PowerShell plus .NET
-    `System.Drawing` for image work).
+  - Ask before installing system-wide software. Use the built-in tools (PowerShell plus .NET
+    `System.Drawing`) for image work.
 - Bike behaviour is only "verified" once the user has tested it on the real bike. Mark everything else
-  as unverified in code comments and in `HANDOFF.md`.
+  as unverified in code comments and in `MerachRide/HANDOFF.md`.
 
 ## Verified bike protocol (do not change without new evidence)
 
@@ -26,7 +25,7 @@ Read `HANDOFF.md` first. It has the current status, the discovery log and the ne
 - Proprietary service `59554c55-…-4d4552414348` ("MERACH") is a fallback that hasn't been explored.
   **Never write to `02f00000-…-fe00`**, which is probably firmware update (OTA).
 - Unverified: whether Indoor Bike Data (`0x2AD2`) reports resistance as `8` or `80`.
-  `IndoorBikeDataParser.normalizeResistance` guesses.
+  `protocol/ResistanceScale` works it out from the first unambiguous value and logs the answer.
 
 ## Code layout (`MerachRide/app/src/main/java/app/merachride/`)
 
@@ -41,7 +40,7 @@ Read `HANDOFF.md` first. It has the current status, the discovery log and the ne
 
 ## Working conventions
 
-- After meaningful progress, add a dated line to the **Log** in `HANDOFF.md` and update **Status**.
+- After meaningful progress, add a dated line to the **Log** in `MerachRide/HANDOFF.md` and update **Status**.
 - Git: the remote is `https://bt1002@github.com/bt1002/bike-app.git` (the username in the URL makes Git
   sign in as the personal account). Commit as `bt1002 <bradtrammell@gmail.com>` (set in the repo's local
   config). Branch `main`.

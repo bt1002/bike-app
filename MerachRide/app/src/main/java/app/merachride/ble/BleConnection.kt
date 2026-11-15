@@ -92,7 +92,8 @@ class BleConnection(
             _notifications.tryEmit(Notification(c.uuid, value.copyOf()))
         }
 
-        // ...and older versions call this one. Android 13+ calls both, hence the version check.
+        // ...and Android 12 and older call this one. On 13+ it only runs if the override above calls
+        // super, which it doesn't; the version check guards against double delivery anyway.
         @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
         override fun onCharacteristicChanged(g: BluetoothGatt, c: BluetoothGattCharacteristic) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) return

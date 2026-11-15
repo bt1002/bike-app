@@ -16,7 +16,7 @@ bike's resistance (levels 1–16) automatically.
      `gradle wrapper` in this folder, or let Studio create them when it asks.
    - If Studio offers to upgrade the Android Gradle Plugin, accepting is fine.
    - If sync fails with *"Unsupported class file major version"*, go to Settings → Build → Build Tools →
-     Gradle and set **Gradle JDK** to version 17 or 21.
+     Gradle and set **Gradle JDK** to a newer version. JDK 23 is known to work (2026-11-14, on the primary dev PC).
 4. On the phone, turn on **Developer options → USB debugging** and plug it in.
 5. Press **Run ▶** with the `app` configuration.
 
@@ -59,6 +59,6 @@ the link drops, re-applying the last resistance level.
 
 ## Not yet verified on the real bike
 
-- Whether live data reports resistance as `8` or `80` (the parser handles both, using a heuristic).
+- Whether live data reports resistance as `8` or `80` (`ResistanceScale` detects it and writes the answer to the connection log).
 - How the bike reacts when its own buttons change resistance mid-workout.
 - Reconnect behaviour after the bike goes to sleep.

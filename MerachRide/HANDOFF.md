@@ -1,11 +1,12 @@
 # HANDOFF — merach-bike-app
 
-Suggested location: `projects/merach-bike-app/HANDOFF.md`
+Location: `MerachRide/HANDOFF.md` (moved from the repo root 2026-11-14 so it sits in the folder opened in Android Studio).
 
 ## Status
-**Phase:** v0.1 code written in `MerachRide/` and **never compiled**: this PC has no Android tooling and no admin rights. Next: copy `MerachRide/` to a machine with Android Studio, build, fix compile errors, test on the bike.
+**Phase:** On-bike testing. Android Studio is installed on the primary dev PC (Gradle JDK 23). As of 2026-11-14 the project **compiles**, `assembleDebug` produces an APK, and all **24 unit tests pass**. Nothing has run on a phone or the bike yet.
 **Protocol:** Standard FTMS. Resistance-level control only (1–16; write `04 <level*10>`). No power target (no native ERG). Bike reports power, cadence, HR, etc. via `0x2AD2`.
 **Blocking item:** None.
+**Uncommitted work:** The review fixes from 2026-11-14 (see Log) are in the working tree and not committed yet. The project now builds, so they're ready to commit.
 
 ## Goal
 Native Android app that connects to a Merach S29 Aura exercise bike over Bluetooth LE and runs basic structured workouts by commanding the bike's resistance automatically.
@@ -22,13 +23,18 @@ Native Android app that connects to a Merach S29 Aura exercise bike over Bluetoo
 3. Bike uses a proprietary GATT service, not FTMS.
 
 ## Next Steps
-1. **Probe the bike with nRF Connect (Android).**
-   - Close the Merach app and make sure the built-in screen isn't connected.
-   - Scan, connect, record all services/characteristics (screenshot or export).
-2. **Branch on result:**
-   - **FTMS present (`0x1826`)** → manually test control in nRF Connect (sequence below) before writing code.
-   - **Proprietary only** → capture Merach app traffic: Developer Options → Enable Bluetooth HCI snoop log → change resistance in Merach app → `adb bugreport` → decode `btsnoop_hci.log` in Wireshark. Map the command bytes for each resistance level.
-3. Scaffold the Android project around the confirmed protocol.
+Discovery is done (see Log), so these steps start at the first build.
+1. **Get it compiling.** Build → Make Project. Fix compile errors. Expect a few, because nothing has been compiled before.
+2. **Run the unit tests.** Use the gutter ▶ in a test file, or Gradle panel → app → Tasks → verification → `testDebugUnitTest`. Tests are in `app/src/test`: `FtmsProtocolTest`, `IndoorBikeDataParserTest`, `ResistanceScaleTest`, `WorkoutTest`.
+3. **Commit** the build fixes together with the uncommitted review fixes.
+4. **Install on the phone.** Wireless debugging avoids needing USB drivers.
+5. **Test on the bike**, checking the in-app connection log after each step:
+   - Connect, then try manual −/+ across levels 1–16.
+   - Note the "Bike reports resistance in …" log line. It answers whether `0x2AD2` reports levels or tenths. Record the result here and in CLAUDE.md, and mark it verified.
+   - Run the Quick Test workout (levels 2 → 8 → 16 → 1).
+   - Change the level with the bike's own buttons mid-workout and note what happens.
+   - Let the bike sleep, then check that the app reconnects and resumes the workout.
+6. Later ideas: app-side ERG (adjust the level to hold target watts), a workout editor, ride history and export.
 
 ## Reference: FTMS (if supported)
 | Characteristic | UUID | Use |
@@ -75,3 +81,6 @@ Native Android app that connects to a Merach S29 Aura exercise bike over Bluetoo
 - 2026-11-14 — Wrote `MerachRide/` Android project (Kotlin/Compose; AGP 8.7.3, Gradle 8.10.2, Kotlin 2.0.21, minSdk 26, targetSdk 35). Includes: BLE connection with serialized GATT queue, FTMS handshake (`00` → `07` → re-apply level), auto-reconnect with backoff, live data parser, manual ±level, workout engine plus 4 built-in workouts, foreground service, in-app connection log, JVM unit tests. No gradlew scripts (Studio doesn't need them). See `MerachRide/README.md`.
   - Unverified on hardware: resistance units in `0x2AD2` (parser guesses), behavior when bike buttons change level, reconnect after bike sleeps.
   - Ideas for later: app-side ERG (adjust level to hold target watts), custom workout editor, ride history and export.
+- 2026-11-14 — Code review fixes (still uncompiled): resistance from `0x2AD2` now goes through new `protocol/ResistanceScale` (old heuristic showed level 1 as 10 if the bike reports 0.1 units; the detected unit is logged); stray/late Control Point replies are ignored instead of failing the next command; state leaves `Ready` as soon as the link drops; a running workout pauses on link loss and resumes on reconnect; fast −/+ taps no longer lose steps and the bike always ends on the latest target. Plan: install Android Studio on this PC.
+- 2026-11-14 — Android Studio installed on the primary dev PC. Gradle sync needed **Gradle JDK = 23** (Settings → Build → Build Tools → Gradle).
+- 2026-11-14 — **First build succeeded with no code changes.** `:app:compileDebugKotlin`, `:app:testDebugUnitTest` (24 passed, 0 failed) and `:app:assembleDebug` all pass. Next: commit, install on the phone, then test on the bike.

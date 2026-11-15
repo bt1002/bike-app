@@ -17,10 +17,12 @@ import app.merachride.protocol.FtmsProtocol
 import app.merachride.protocol.FtmsProtocol.ResultCode
 import app.merachride.protocol.FtmsUuids
 import app.merachride.protocol.IndoorBikeDataParser
+import app.merachride.protocol.ResistanceScale
 import app.merachride.service.RideService
 import app.merachride.workout.WorkoutEngine
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,6 +34,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -90,21 +93,50 @@ class BikeSession(
     private var scanCallback: ScanCallback? = null
 
     private val commandMutex = Mutex()
-    @Volatile private var pendingResponse: CompletableDeferred<FtmsProtocol.ControlPointResponse>? = null
+    private val levelMutex = Mutex()
+    private var lastConnectedAddress: String? = null
+    /** The Control Point command waiting for its `80 <op> <result>` indication. */
+    private class PendingCommand(val opCode: Int, val result: CompletableDeferred<ResultCode>)
+    @Volatile private var pending: PendingCommand? = null
+
+    private val resistanceScale = ResistanceScale()
+
+    /** True when the workout was paused because the link dropped, so it resumes on reconnect. */
+    @Volatile private var resumeWorkoutOnReconnect = false
 
     init {
         scope.launch {
             conn.notifications.collect { n ->
                 when (n.uuid) {
-                    FtmsUuids.INDOOR_BIKE_DATA ->
-                        _data.update { IndoorBikeDataParser.parse(n.value, it) }
-
-                    FtmsUuids.CONTROL_POINT ->
-                        FtmsProtocol.parseControlPointResponse(n.value)?.let { pendingResponse?.complete(it) }
-
+                    FtmsUuids.INDOOR_BIKE_DATA -> onBikeData(n.value)
+                    FtmsUuids.CONTROL_POINT -> onControlPointResponse(n.value)
                     FtmsUuids.STATUS -> onStatus(n.value)
                 }
             }
+        }
+    }
+
+    private fun onBikeData(bytes: ByteArray) {
+        val unitBefore = resistanceScale.unit
+        _data.update { prev ->
+            val d = IndoorBikeDataParser.parse(bytes, prev)
+            d.copy(resistanceLevel = d.resistanceRaw?.let { resistanceScale.toLevel(it, _targetLevel.value) })
+        }
+        val unitAfter = resistanceScale.unit
+        if (unitAfter != unitBefore) {
+            // Logged so the unverified unit question can be answered from the in-app log.
+            log("Bike reports resistance in ${unitAfter.name.lowercase()} (raw ${_data.value.resistanceRaw})")
+        }
+    }
+
+    private fun onControlPointResponse(bytes: ByteArray) {
+        val r = FtmsProtocol.parseControlPointResponse(bytes) ?: return
+        val p = pending
+        if (p != null && p.opCode == r.requestOpCode) {
+            p.result.complete(r.result)
+        } else {
+            // e.g. a late reply to a command that already timed out. Don't let it answer the wrong command.
+            log("Ignored stray Control Point reply for op 0x%02X".format(r.requestOpCode))
         }
     }
 
@@ -173,6 +205,8 @@ class BikeSession(
         stopScan()
         prefs.edit().putString(KEY_ADDRESS, address).putString(KEY_NAME, name).apply()
         sessionJob?.cancel()
+        if (address != lastConnectedAddress) resistanceScale.reset() // Another bike may use other units.
+        lastConnectedAddress = address
         ContextCompat.startForegroundService(app, Intent(app, RideService::class.java))
 
         sessionJob = scope.launch {
@@ -184,17 +218,38 @@ class BikeSession(
                 if (setUp(address)) {
                     attempt = 0
                     _state.value = ConnState.Ready(name)
+                    resumeWorkoutIfPausedByDrop()
                     conn.connected.first { !it } // Suspend until the link drops.
                     log("Connection lost")
+                    // Leave Ready right away so the UI and setResistanceLevel() don't act on a dead link during the backoff.
+                    _state.value = ConnState.Connecting(name, 1)
+                    pauseWorkoutForDrop()
                 }
                 delay(1_000L + attempt.coerceAtMost(5) * 2_000L)
             }
         }
     }
 
+    private suspend fun pauseWorkoutForDrop(): Unit = withContext(Dispatchers.Main) {
+        if (workout.state.value.running) {
+            workout.pause()
+            resumeWorkoutOnReconnect = true
+            log("Workout paused until the bike reconnects")
+        }
+    }
+
+    private suspend fun resumeWorkoutIfPausedByDrop(): Unit = withContext(Dispatchers.Main) {
+        if (resumeWorkoutOnReconnect) {
+            resumeWorkoutOnReconnect = false
+            workout.start() // No-op if the user ended or restarted the workout meanwhile.
+            log("Workout resumed")
+        }
+    }
+
     fun disconnect() {
         sessionJob?.cancel()
         sessionJob = null
+        resumeWorkoutOnReconnect = false
         workout.pause()
         conn.disconnect()
         _state.value = ConnState.Idle
@@ -243,9 +298,26 @@ class BikeSession(
     // ---------------------------------------------------------------- control
 
     override suspend fun setResistanceLevel(level: Int): Boolean {
-        val l = level.coerceIn(FtmsProtocol.MIN_LEVEL, FtmsProtocol.MAX_LEVEL)
-        _targetLevel.value = l
-        if (_state.value !is ConnState.Ready) return false // Applied in setUp() on reconnect.
+        _targetLevel.value = level.coerceIn(FtmsProtocol.MIN_LEVEL, FtmsProtocol.MAX_LEVEL)
+        return sendTargetLevel()
+    }
+
+    /** +1 / -1 from the UI buttons. The target updates at once, so fast taps add up correctly. */
+    fun changeLevel(delta: Int) {
+        _targetLevel.update { current ->
+            val base = current ?: _data.value.resistanceLevel ?: FtmsProtocol.MIN_LEVEL
+            (base + delta).coerceIn(FtmsProtocol.MIN_LEVEL, FtmsProtocol.MAX_LEVEL)
+        }
+        scope.launch { sendTargetLevel() }
+    }
+
+    /**
+     * Sends whatever [targetLevel] is *now*. Callers may run out of order, but each one sends
+     * the latest target, so the bike always ends on the last level asked for.
+     */
+    private suspend fun sendTargetLevel(): Boolean = levelMutex.withLock {
+        val l = _targetLevel.value ?: return@withLock false
+        if (_state.value !is ConnState.Ready) return@withLock false // Applied in setUp() on reconnect.
 
         var result = sendCommand(FtmsProtocol.setResistanceLevel(l))
         if (result == ResultCode.CONTROL_NOT_PERMITTED) {
@@ -254,28 +326,20 @@ class BikeSession(
             result = sendCommand(FtmsProtocol.setResistanceLevel(l))
         }
         if (result == ResultCode.SUCCESS) log("Level $l") else log("Set level $l failed: $result")
-        return result == ResultCode.SUCCESS
-    }
-
-    /** +1 / -1 from the UI buttons. */
-    fun changeLevel(delta: Int) {
-        val base = _targetLevel.value ?: _data.value.resistanceLevel ?: FtmsProtocol.MIN_LEVEL
-        scope.launch { setResistanceLevel(base + delta) }
+        result == ResultCode.SUCCESS
     }
 
     /** Writes one Control Point command and waits for its `80 <op> <result>` indication. */
     private suspend fun sendCommand(bytes: ByteArray): ResultCode = commandMutex.withLock {
-        val response = CompletableDeferred<FtmsProtocol.ControlPointResponse>()
-        pendingResponse = response
+        val p = PendingCommand(bytes[0].toInt() and 0xFF, CompletableDeferred())
+        pending = p
         try {
             if (!conn.write(FtmsUuids.SERVICE, FtmsUuids.CONTROL_POINT, bytes)) {
                 return@withLock ResultCode.WRITE_FAILED
             }
-            val r = withTimeoutOrNull(COMMAND_TIMEOUT_MS) { response.await() }
-                ?: return@withLock ResultCode.TIMEOUT
-            if (r.requestOpCode != (bytes[0].toInt() and 0xFF)) ResultCode.MISMATCHED_RESPONSE else r.result
+            withTimeoutOrNull(COMMAND_TIMEOUT_MS) { p.result.await() } ?: ResultCode.TIMEOUT
         } finally {
-            pendingResponse = null
+            pending = null
         }
     }
 

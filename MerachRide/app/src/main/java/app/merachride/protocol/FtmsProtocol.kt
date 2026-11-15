@@ -42,9 +42,7 @@ object FtmsProtocol {
         /** App-side: the GATT write itself failed. */
         WRITE_FAILED,
         /** App-side: no indication arrived in time. */
-        TIMEOUT,
-        /** App-side: a response arrived for a different command. */
-        MISMATCHED_RESPONSE;
+        TIMEOUT;
 
         companion object {
             fun fromByte(code: Int): ResultCode = when (code) {

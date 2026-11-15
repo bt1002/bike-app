@@ -26,16 +26,11 @@ class IndoorBikeDataParserTest {
     }
 
     @Test
-    fun resistanceInTenthsIsNormalised() {
-        // flags 0x0021: "more data" (no speed) + resistance
+    fun resistanceIsStoredRaw() {
+        // flags 0x0021: "more data" (no speed) + resistance. Converting to a level is ResistanceScale's job.
         val d = IndoorBikeDataParser.parse(hex(0x21, 0x00, 0x50, 0x00)) // raw 80
-        assertEquals(8, d.resistanceLevel)
-    }
-
-    @Test
-    fun resistanceInWholeLevelsIsKept() {
-        val d = IndoorBikeDataParser.parse(hex(0x21, 0x00, 0x08, 0x00))
-        assertEquals(8, d.resistanceLevel)
+        assertEquals(80, d.resistanceRaw)
+        assertNull(d.resistanceLevel)
     }
 
     @Test
@@ -63,7 +58,7 @@ class IndoorBikeDataParserTest {
         val first = IndoorBikeDataParser.parse(hex(0x44, 0x00, 0xA0, 0x0F, 0xB4, 0x00, 0x96, 0x00))
         val second = IndoorBikeDataParser.parse(hex(0x21, 0x00, 0x50, 0x00), first)
         assertEquals(150, second.powerW)
-        assertEquals(8, second.resistanceLevel)
+        assertEquals(80, second.resistanceRaw)
     }
 
     @Test

@@ -5,6 +5,9 @@ data class BikeData(
     val speedKmh: Double? = null,
     val cadenceRpm: Double? = null,
     val totalDistanceM: Int? = null,
+    /** Resistance exactly as the bike sent it. Units unverified: see [ResistanceScale]. */
+    val resistanceRaw: Int? = null,
+    /** Resistance as a 1..16 level, worked out from [resistanceRaw] by [ResistanceScale]. Null = unknown. */
     val resistanceLevel: Int? = null,
     val powerW: Int? = null,
     val totalEnergyKcal: Int? = null,
@@ -34,7 +37,7 @@ object IndoorBikeDataParser {
             if (has(2)) d = d.copy(cadenceRpm = r.u16() / 2.0)
             if (has(3)) r.skip(2)                                   // average cadence
             if (has(4)) d = d.copy(totalDistanceM = r.u24())
-            if (has(5)) d = d.copy(resistanceLevel = normalizeResistance(r.s16()))
+            if (has(5)) d = d.copy(resistanceRaw = r.s16())
             if (has(6)) d = d.copy(powerW = r.s16())
             if (has(7)) r.skip(2)                                   // average power
             if (has(8)) {                                           // expended energy
@@ -51,14 +54,6 @@ object IndoorBikeDataParser {
         }
         return d
     }
-
-    /**
-     * The spec gives Indoor Bike Data resistance a resolution of 1, but many bikes report it in
-     * 0.1 units like the control point (so level 8 arrives as 80). Not yet verified on the S29 —
-     * values above the max level are assumed to be in 0.1 units.
-     */
-    fun normalizeResistance(raw: Int): Int =
-        if (raw > FtmsProtocol.MAX_LEVEL) (raw + 5) / 10 else raw
 
     private class Reader(private val b: ByteArray) {
         private var i = 0
