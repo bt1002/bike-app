@@ -61,6 +61,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.merachride.BikeSession
 import app.merachride.ConnState
 import app.merachride.HeartRateMonitor
+import app.merachride.WatchLink
 import app.merachride.history.RideProgress
 import app.merachride.history.RideTracker
 import app.merachride.protocol.BikeData
@@ -80,6 +81,7 @@ fun RideScreen(
     session: BikeSession,
     tracker: RideTracker,
     heartRate: HeartRateMonitor,
+    watchLink: WatchLink,
     onChooseWorkout: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -103,6 +105,7 @@ fun RideScreen(
         Header(
             state,
             hrState = hrState,
+            hrLive = hrBpm != null,
             onShowHeartRate = { showHeartRate = true },
             onShowLog = { showLog = true },
             onDisconnect = session::disconnect,
@@ -149,7 +152,7 @@ fun RideScreen(
             heartRate.stopScan()
             showHeartRate = false
         }) {
-            HeartRatePanel(heartRate)
+            HeartRatePanel(heartRate, watchLink)
         }
     }
 
@@ -179,6 +182,7 @@ fun RideScreen(
 private fun Header(
     state: ConnState,
     hrState: HeartRateMonitor.State,
+    hrLive: Boolean,
     onShowHeartRate: () -> Unit,
     onShowLog: () -> Unit,
     onDisconnect: () -> Unit,
@@ -198,8 +202,8 @@ private fun Header(
             Text(text, color = color, style = MaterialTheme.typography.bodySmall)
         }
         IconButton(onClick = onShowHeartRate) {
-            // Filled and coloured when a monitor is connected, outlined otherwise.
-            if (hrState is HeartRateMonitor.State.Connected) {
+            // Filled and coloured when a monitor is connected or the watch app is sending, outlined otherwise.
+            if (hrState is HeartRateMonitor.State.Connected || hrLive) {
                 Icon(Icons.Filled.Favorite, contentDescription = "Heart rate monitor (connected)", tint = MaterialTheme.colorScheme.error)
             } else {
                 Icon(Icons.Outlined.FavoriteBorder, contentDescription = "Heart rate monitor")

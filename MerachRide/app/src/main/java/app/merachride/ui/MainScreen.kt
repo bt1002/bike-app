@@ -50,6 +50,7 @@ fun MainScreen(app: MerachRideApp) {
                 session = app.session,
                 tracker = app.rideTracker,
                 heartRate = app.heartRate,
+                watchLink = app.watchLink,
                 onChooseWorkout = { tab = Tab.Workouts },
                 modifier = m,
             )

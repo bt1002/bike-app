@@ -43,7 +43,12 @@ Read `MerachRide/HANDOFF.md` first. It has the current status, the discovery log
 - `HeartRateMonitor.kt`: optional second BLE link to a standard heart rate monitor (`0x180D`), e.g. the user's
   Pixel Watch via Connected Fitness (verified with the user's Pixel Watch 2, 2026-11-15). Its bpm overrides
   the bike's in the UI and in recorded rides.
-  Parser in `protocol/HeartRate.kt`.
+  Parser in `protocol/HeartRate.kt`. Reconnects to the saved monitor in the background while the bike is
+  connected (`startAutoConnect`, unverified).
+- `WatchLink.kt` + `wear/` module: the MerachRide watch app reads heart rate with Health Services and sends
+  it over the Wear OS Data Layer; the phone opens it with `RemoteActivityHelper` when the bike connects.
+  Message format in `protocol/WatchProtocol.kt`, copied in `wear/.../WatchProtocol.kt` (keep in sync). Both
+  apps share applicationId `app.merachride`. Unverified: not yet built.
 - `workout/`: model (segments hold a level or ramp via `endLevel`), engine (1 s ticker on the Main dispatcher;
   sends a level whenever `Workout.levelAt` changes), built-in workouts, editor draft (`WorkoutDraft`),
   `WorkoutCodec` (`workouts.json`) and `WorkoutImport` (merge an imported file by id).

@@ -13,6 +13,7 @@ import app.merachride.protocol.HeartRateParser
 import app.merachride.protocol.HeartRateUuids
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -26,7 +27,10 @@ import kotlinx.coroutines.launch
  * Connection to a standard Bluetooth heart rate monitor (Heart Rate Service 0x180D): a chest strap,
  * or a watch app that broadcasts heart rate. Independent of the bike connection.
  *
- * UNVERIFIED with the user's Pixel Watch: it depends on a watch app that broadcasts the standard service.
+ * Verified with the user's Pixel Watch 2 (Connected Fitness), 2026-11-15.
+ *
+ * Readings can also come from the MerachRide watch app via [reportFromWatch] (see [WatchLink]);
+ * both sources feed the same [bpm].
  */
 @SuppressLint("MissingPermission") // The UI gates everything behind the Bluetooth permissions.
 class HeartRateMonitor(
@@ -42,7 +46,9 @@ class HeartRateMonitor(
 
     private val adapter: BluetoothAdapter? = app.getSystemService(BluetoothManager::class.java)?.adapter
     private val prefs = app.getSharedPreferences("heart_rate", Context.MODE_PRIVATE)
-    private val conn = BleConnection(app, HeartRateUuids.SERVICE) { log("HR: $it") }
+    /** True while the background auto-connect is trying, so its failed attempts don't flood the log. */
+    @Volatile private var quiet = false
+    private val conn = BleConnection(app, HeartRateUuids.SERVICE) { if (!quiet) log("HR: $it") }
 
     private val _state = MutableStateFlow<State>(State.Idle)
     val state: StateFlow<State> = _state.asStateFlow()
@@ -71,7 +77,16 @@ class HeartRateMonitor(
         }
 
     @Volatile private var lastReadingAt = 0L
+    @Volatile private var lastWatchReadingAt = 0L
+    @Volatile private var lastFromWatch = false
     private var sessionJob: Job? = null
+    /** True if the current session was started by [startAutoConnect], so it ends when the bike goes away. */
+    @Volatile private var sessionIsAuto = false
+    private var autoJob: Job? = null
+
+    private val _autoWaiting = MutableStateFlow(false)
+    /** True while the app is waiting in the background for the saved monitor to start sharing. */
+    val autoWaiting: StateFlow<Boolean> = _autoWaiting.asStateFlow()
     private var scanJob: Job? = null
     private var scanCallback: ScanCallback? = null
 
@@ -81,6 +96,7 @@ class HeartRateMonitor(
                 if (n.uuid == HeartRateUuids.MEASUREMENT) {
                     HeartRateParser.parse(n.value)?.let {
                         lastReadingAt = SystemClock.elapsedRealtime()
+                        lastFromWatch = false
                         _bpm.value = it
                     }
                 }
@@ -90,13 +106,35 @@ class HeartRateMonitor(
         scope.launch {
             while (isActive) {
                 delay(1_000)
-                if (_bpm.value != null && SystemClock.elapsedRealtime() - lastReadingAt > STALE_MS) _bpm.value = null
+                // The watch app may send every few seconds when its screen is off, so give it longer.
+                val staleAfter = if (lastFromWatch) WATCH_STALE_MS else STALE_MS
+                if (_bpm.value != null && SystemClock.elapsedRealtime() - lastReadingAt > staleAfter) _bpm.value = null
             }
         }
     }
 
     val savedDevice: SavedDevice?
         get() = prefs.getString(KEY_ADDRESS, null)?.let { SavedDevice(it, prefs.getString(KEY_NAME, null)) }
+
+    /** Whether to connect to [savedDevice] automatically whenever the bike connects. On by default. */
+    var autoReconnect: Boolean
+        get() = prefs.getBoolean(KEY_AUTO, true)
+        set(value) {
+            prefs.edit().putBoolean(KEY_AUTO, value).apply()
+            if (!value) stopAutoConnect()
+        }
+
+    /** A reading from the MerachRide watch app (it doesn't use Bluetooth heart rate sharing). */
+    fun reportFromWatch(bpm: Int) {
+        if (bpm <= 0) return
+        val now = SystemClock.elapsedRealtime()
+        lastReadingAt = now
+        lastWatchReadingAt = now
+        lastFromWatch = true
+        _bpm.value = bpm
+    }
+
+    private fun watchAppIsSending() = SystemClock.elapsedRealtime() - lastWatchReadingAt < WATCH_STALE_MS
 
     // ---------------------------------------------------------------- scanning
 
@@ -157,22 +195,88 @@ class HeartRateMonitor(
     fun connect(address: String, name: String?) {
         stopScan()
         prefs.edit().putString(KEY_ADDRESS, address).putString(KEY_NAME, name).apply()
-        sessionJob?.cancel()
-        sessionJob = scope.launch {
-            var attempt = 0
-            var everConnected = false
-            while (isActive) {
-                attempt++
-                // A device that never worked is probably not a heart rate monitor (e.g. earbuds picked
-                // from the paired list), so stop instead of retrying forever. Once it has worked, keep retrying.
-                if (!everConnected && attempt > FIRST_CONNECT_TRIES) {
-                    log("HR: no heart rate from ${name ?: address}. Is heart rate sharing on?")
-                    _state.value = State.Idle
-                    return@launch
+        val auto = autoJob
+        autoJob = null
+        startSession(address, name, alreadyUp = false, auto = false, waitFor = auto)
+    }
+
+    /**
+     * Called when the bike connects. If there's a saved monitor and [autoReconnect] is on, keeps trying it
+     * quietly in the background until it answers (e.g. once Connected Fitness is turned on on the watch),
+     * then carries on like [connect]. Does nothing if a monitor is already connected or being connected.
+     * UNVERIFIED on the phone.
+     */
+    fun startAutoConnect() {
+        val saved = savedDevice ?: return
+        if (!autoReconnect || sessionJob?.isActive == true || autoJob?.isActive == true) return
+        autoJob = scope.launch {
+            _autoWaiting.value = true
+            log("HR: waiting for ${saved.name ?: saved.address} to share heart rate")
+            try {
+                while (isActive) {
+                    // No need to look for Bluetooth sharing while the watch app is already sending.
+                    if (!watchAppIsSending()) {
+                        quiet = true
+                        val up = try {
+                            setUp(saved.address)
+                        } finally {
+                            quiet = false
+                        }
+                        if (up) {
+                            startSession(saved.address, saved.name, alreadyUp = true, auto = true, waitFor = null)
+                            return@launch
+                        }
+                    }
+                    delay(AUTO_RETRY_MS)
                 }
-                _state.value = State.Connecting(name, attempt)
-                log(if (attempt == 1) "HR: connecting to ${name ?: address}" else "HR: reconnect attempt $attempt")
-                if (setUp(address)) {
+            } finally {
+                _autoWaiting.value = false
+            }
+        }
+    }
+
+    /**
+     * Called when the bike goes away. Stops the background search, and disconnects the monitor if the
+     * search connected it. A monitor the user connected by hand stays connected.
+     */
+    fun stopAutoConnect() {
+        val auto = autoJob
+        autoJob = null
+        val endSession = sessionIsAuto && sessionJob?.isActive == true
+        if (auto == null && !endSession) return
+        scope.launch {
+            auto?.cancelAndJoin()
+            if (endSession) {
+                disconnect()
+            } else if (sessionJob?.isActive != true) {
+                conn.disconnect() // In case the search was cancelled mid-connect.
+            }
+        }
+    }
+
+    private fun startSession(address: String, name: String?, alreadyUp: Boolean, auto: Boolean, waitFor: Job?) {
+        sessionJob?.cancel()
+        sessionIsAuto = auto
+        sessionJob = scope.launch {
+            waitFor?.cancelAndJoin() // Let a background search finish before this session uses the link.
+            var attempt = 0
+            var everConnected = alreadyUp
+            var up = alreadyUp
+            while (isActive) {
+                if (!up) {
+                    attempt++
+                    // A device that never worked is probably not a heart rate monitor (e.g. earbuds picked
+                    // from the paired list), so stop instead of retrying forever. Once it has worked, keep retrying.
+                    if (!everConnected && attempt > FIRST_CONNECT_TRIES) {
+                        log("HR: no heart rate from ${name ?: address}. Is heart rate sharing on?")
+                        _state.value = State.Idle
+                        return@launch
+                    }
+                    _state.value = State.Connecting(name, attempt)
+                    log(if (attempt == 1) "HR: connecting to ${name ?: address}" else "HR: reconnect attempt $attempt")
+                    up = setUp(address)
+                }
+                if (up) {
                     everConnected = true
                     attempt = 0
                     _state.value = State.Connected(name)
@@ -180,6 +284,7 @@ class HeartRateMonitor(
                     conn.connected.first { !it } // Suspend until the link drops.
                     log("HR: connection lost")
                     _state.value = State.Connecting(name, 1)
+                    up = false
                 }
                 delay(1_000L + attempt.coerceAtMost(5) * 2_000L)
             }
@@ -187,8 +292,11 @@ class HeartRateMonitor(
     }
 
     fun disconnect() {
+        autoJob?.cancel()
+        autoJob = null
         sessionJob?.cancel()
         sessionJob = null
+        sessionIsAuto = false
         conn.disconnect()
         _state.value = State.Idle
         _bpm.value = null
@@ -198,12 +306,12 @@ class HeartRateMonitor(
     private suspend fun setUp(address: String): Boolean {
         val a = adapter
         if (a == null || !a.isEnabled) {
-            log("HR: Bluetooth is off")
+            if (!quiet) log("HR: Bluetooth is off")
             return false
         }
         if (!conn.connect(a.getRemoteDevice(address))) return false
         if (!conn.enableNotifications(HeartRateUuids.SERVICE, HeartRateUuids.MEASUREMENT, indicate = false)) {
-            log("HR: couldn't subscribe to heart rate")
+            if (!quiet) log("HR: couldn't subscribe to heart rate")
             conn.disconnect()
             return false
         }
@@ -213,6 +321,9 @@ class HeartRateMonitor(
     private companion object {
         const val KEY_ADDRESS = "address"
         const val KEY_NAME = "name"
+        const val KEY_AUTO = "auto_reconnect"
+        const val AUTO_RETRY_MS = 10_000L
+        const val WATCH_STALE_MS = 15_000L
         const val SCAN_DURATION_MS = 15_000L
         const val STALE_MS = 5_000L
         const val FIRST_CONNECT_TRIES = 3

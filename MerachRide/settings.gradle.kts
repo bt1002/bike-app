@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "MerachRide"
 include(":app")
+include(":wear") // MerachRide watch app (Wear OS): sends heart rate to the phone app

@@ -10,6 +10,11 @@ import app.merachride.workout.WorkoutCodec
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import java.io.File
 
 class MerachRideApp : Application() {
@@ -32,6 +37,10 @@ class MerachRideApp : Application() {
     lateinit var heartRate: HeartRateMonitor
         private set
 
+    /** The MerachRide watch app, which sends heart rate from the watch without Bluetooth sharing. */
+    lateinit var watchLink: WatchLink
+        private set
+
     override fun onCreate() {
         super.onCreate()
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -50,5 +59,49 @@ class MerachRideApp : Application() {
             RideCodec::decode,
         )
         rideTracker = RideTracker(scope, session, heartRate, rideHistory)
+        watchLink = WatchLink(this, scope, heartRate, session::log)
+        followBikeForHeartRate(scope)
+    }
+
+    /**
+     * Heart rate follows the bike: when the bike connects, start the watch app and look for the saved
+     * monitor; when the user disconnects, or the bike stays unreachable for [HR_GIVE_UP_MS], stop whatever
+     * was started automatically. A brief reconnect (bike asleep) changes nothing. UNVERIFIED on the phone.
+     */
+    private fun followBikeForHeartRate(scope: CoroutineScope) {
+        scope.launch {
+            session.state
+                .map { s ->
+                    when (s) {
+                        is ConnState.Ready -> BikeLink.READY
+                        is ConnState.Connecting -> BikeLink.CONNECTING
+                        ConnState.Idle -> BikeLink.IDLE
+                    }
+                }
+                .distinctUntilChanged()
+                .collectLatest { link ->
+                    when (link) {
+                        BikeLink.READY -> {
+                            heartRate.startAutoConnect()
+                            watchLink.onBikeConnected()
+                        }
+                        BikeLink.IDLE -> {
+                            heartRate.stopAutoConnect()
+                            watchLink.onBikeGone()
+                        }
+                        BikeLink.CONNECTING -> {
+                            delay(HR_GIVE_UP_MS) // Cancelled if the bike comes back first.
+                            heartRate.stopAutoConnect()
+                            watchLink.onBikeGone()
+                        }
+                    }
+                }
+        }
+    }
+
+    private enum class BikeLink { IDLE, CONNECTING, READY }
+
+    private companion object {
+        const val HR_GIVE_UP_MS = 5 * 60_000L
     }
 }

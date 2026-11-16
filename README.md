@@ -24,6 +24,8 @@ publishes no protocol documentation. Probing the bike showed that it speaks the 
 - A **web workout builder** ([`tools/workout-builder.html`](tools/workout-builder.html)) for making workouts
   on a computer. Open it in a browser, export `workouts.json`, and use **Import** on the app's Workouts tab.
 - Ride history with per-ride stats (time, distance, kcal, power, cadence, heart rate) and totals.
+- Heart rate from a Pixel Watch, either through Connected Fitness or the companion **watch app**
+  (`MerachRide/wear/`, not yet tested), which starts on the watch when the bike connects.
 
 ## What's verified
 

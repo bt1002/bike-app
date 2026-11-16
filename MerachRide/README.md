@@ -24,6 +24,20 @@ features (ride layout, custom workouts, ramps, history) are installed but not ye
 
 Unit tests: right-click `app/src/test` → **Run Tests**, or Gradle task `app:testDebugUnitTest`.
 
+### Watch app (optional, Pixel Watch)
+
+The `wear` module is a small Wear OS app that reads heart rate on the watch and sends it to the phone app,
+so you don't need Connected Fitness. The phone opens it automatically when the bike connects.
+
+1. Install the phone app first (above), from the same PC. The watch and phone apps must be signed with the
+   same key, which debug builds from one PC are.
+2. On the watch: Settings → System → About → Versions → tap **Build number** 7 times. Then Settings →
+   Developer options → **ADB debugging** and **Wireless debugging** on.
+3. In Studio: **Pair Devices Using Wi-Fi** → pair with code, using the code shown under Wireless debugging
+   on the watch. (Or use `adb pair` / `adb connect` with the addresses the watch shows.)
+4. Pick the **`wear`** run configuration and the watch as the device, then **Run ▶**.
+5. The first time, allow **Sensors** and **Physical activity** on the watch.
+
 ## Using it
 
 1. Fully close the Merach app (the bike accepts one controller at a time).
@@ -39,9 +53,14 @@ Unit tests: right-click `app/src/test` → **Run Tests**, or Gradle task `app:te
      replaces workouts with the same id and adds the rest.
 6. A ride is recorded automatically from your first pedal stroke. Tap **Finish ride** (or disconnect) to
    save it to the **History** tab. Rides under a minute aren't saved.
-7. Heart rate: tap ♡ at the top of the Ride tab to connect a heart rate monitor. A **Pixel Watch** works:
-   on the watch, turn on quick settings → **Connected Fitness** (or Settings → Connectivity → Share Heart
-   Rate), then scan, or pick the watch under "Paired with this phone". Chest straps work too.
+7. Heart rate: tap ♡ at the top of the Ride tab. Two ways to use a **Pixel Watch**:
+   - **Watch app** (see *Watch app* above): it opens on the watch when the bike connects and sends heart
+     rate to the phone. Start/stop it from the ♡ sheet or on the watch. It stops on its own if the phone
+     goes quiet for 3 minutes, and after 4 hours.
+   - **Connected Fitness**: on the watch, turn on quick settings → **Connected Fitness** (or Settings →
+     Connectivity → Share Heart Rate), then scan, or pick the watch under "Paired with this phone". After
+     that, the app reconnects to it automatically whenever the bike connects (switch in the ♡ sheet), so
+     you only need to tap Connected Fitness on the watch. Chest straps work the same way.
 8. The ⓘ icon at the top of the Ride tab opens the connection log. Check it first if something misbehaves.
 
 The connection stays up with the screen off (via a foreground notification) and reconnects automatically
@@ -75,7 +94,13 @@ Built-in workouts: Quick Test (2 min, levels 2 → 8 → 16 → 1), Easy Spin, 1
 | `history/` | `RideRecorder` (ride stats), `RideTracker` (start/finish/save), JSON codec |
 | `data/` | `MiniJson` (small JSON reader/writer) and `JsonFileStore` (list saved to a file) |
 | `service/RideService.kt` | Foreground service that keeps the process alive during a ride |
+| `HeartRateMonitor.kt` | Bluetooth heart rate monitor (Connected Fitness or a strap), auto-reconnect when the bike connects |
+| `WatchLink.kt` | Link to the watch app: opens it, pings it, receives heart rate (Data Layer) |
 | `ui/` | Compose screens: `MainScreen` (tabs), `RideScreen`, `WorkoutsScreen` (list + editor), `HistoryScreen` |
+
+The watch app is in `wear/src/main/java/app/merachride/wear/`: `HeartRateService` (Health Services
+exercise, sends readings), `MainActivity` (screen, permissions) and `WatchProtocol` (a copy of the phone's
+`protocol/WatchProtocol.kt`; keep them in sync).
 
 Custom workouts and rides are saved in the app's private storage as `workouts.json` and `rides.json`.
 Reinstalling from Android Studio keeps them; uninstalling deletes them.
@@ -85,3 +110,4 @@ Reinstalling from Android Studio keeps them; uninstalling deletes them.
 - Reconnecting after the bike goes to sleep, and resuming the workout.
 - The new UI, ramp workouts, and whether History's distance and kcal match the bike's display.
 - One unexplained jump to level 16 during the last segment of Quick Test (seen once; parked).
+- Not yet built or tried: the watch app, and auto-reconnect to the saved heart rate monitor.

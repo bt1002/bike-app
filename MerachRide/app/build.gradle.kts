@@ -51,5 +51,10 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
+    // Watch app link (WatchLink): Data Layer messages, and opening the app on the watch.
+    implementation("com.google.android.gms:play-services-wearable:18.1.0")
+    implementation("androidx.wear:wear-remote-interactions:1.1.0")
+    implementation("com.google.guava:listenablefuture:1.0")
+
     testImplementation("junit:junit:4.13.2")
 }
