@@ -57,6 +57,9 @@ Read `MerachRide/HANDOFF.md` first. It has the current status, the discovery log
   `RideTracker` (ride start/finish/save, Main thread) and `RideCodec` (`rides.json`).
 - `data/`: `MiniJson` (dependency-free JSON, so save formats are JVM-testable) and `JsonFileStore`
   (StateFlow list saved with `AtomicFile`).
+- `report/IssueReport.kt`: pure builder for the "Report issue" link (GitHub new-issue URL with description,
+  details and the log, trimmed to fit ~7.5 KB). UI in `ui/ReportIssueDialog.kt`, opened from the log sheet.
+  No GitHub token in the app: the user submits in the browser.
 - `MerachRideApp.kt`: creates the app-wide singletons (session, workout store, ride history, ride tracker).
 - `service/RideService.kt`: foreground service that keeps the process alive during a ride.
 - `ui/`: Compose screens. `MainScreen` has Ride / Workouts / History tabs (no navigation library).

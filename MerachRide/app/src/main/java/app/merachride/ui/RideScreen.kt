@@ -95,6 +95,7 @@ fun RideScreen(
     val hrBpm by heartRate.bpm.collectAsStateWithLifecycle()
     var showLog by rememberSaveable { mutableStateOf(false) }
     var showHeartRate by rememberSaveable { mutableStateOf(false) }
+    var showReport by rememberSaveable { mutableStateOf(false) }
 
     Column(
         modifier
@@ -158,11 +159,14 @@ fun RideScreen(
 
     if (showLog) {
         ModalBottomSheet(onDismissRequest = { showLog = false }) {
-            Text(
-                "Connection log",
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
+            Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Connection log",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = { showReport = true }) { Text("Report issue") }
+            }
             LazyColumn(
                 Modifier
                     .fillMaxWidth()
@@ -173,6 +177,10 @@ fun RideScreen(
                 }
             }
         }
+    }
+
+    if (showReport) {
+        ReportIssueDialog(session, onDismiss = { showReport = false })
     }
 }
 

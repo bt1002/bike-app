@@ -64,6 +64,9 @@ so you don't need Connected Fitness. The phone opens it automatically when the b
      that, the app reconnects to it automatically whenever the bike connects (switch in the ♡ sheet), so
      you only need to tap Connected Fitness on the watch. Chest straps work the same way.
 8. The ⓘ icon at the top of the Ride tab opens the connection log. Check it first if something misbehaves.
+   **Report issue** (top of the log) asks what happened, then opens GitHub's new-issue page with your text,
+   app details and the log filled in; press Create in the browser (signed in to GitHub). If the log is too
+   long for the link, the newest lines are attached and the full report is copied to the clipboard.
 
 The connection stays up with the screen off (via a foreground notification) and reconnects automatically
 if the link drops, re-applying the last level. A running workout pauses while the link is down and resumes
