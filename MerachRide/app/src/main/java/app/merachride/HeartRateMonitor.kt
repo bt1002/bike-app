@@ -191,7 +191,11 @@ class HeartRateMonitor(
 
     // ---------------------------------------------------------------- connection
 
-    /** Connects and keeps reconnecting until [disconnect] is called. */
+    /**
+     * Connects to a monitor picked by hand and keeps reconnecting until [disconnect] is called. If it has
+     * never answered, it gets [FIRST_CONNECT_TRIES] tries (it may not be a heart rate monitor at all).
+     * The saved monitor is otherwise connected by [startAutoConnect] when the bike connects.
+     */
     fun connect(address: String, name: String?) {
         stopScan()
         prefs.edit().putString(KEY_ADDRESS, address).putString(KEY_NAME, name).apply()

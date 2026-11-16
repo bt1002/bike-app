@@ -11,9 +11,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -41,13 +45,23 @@ fun HistoryScreen(store: JsonFileStore<RideRecord>, modifier: Modifier = Modifie
     val rides by store.items.collectAsStateWithLifecycle()
     var expanded by remember { mutableStateOf<String?>(null) }
     var confirmDelete by remember { mutableStateOf<RideRecord?>(null) }
+    var confirmReset by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        item { Text("History", style = MaterialTheme.typography.titleLarge) }
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("History", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                if (rides.isNotEmpty()) {
+                    TextButton(onClick = { confirmReset = true }) {
+                        Text("Reset history", color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
+        }
         item { Totals(rides) }
         if (rides.isEmpty()) {
             item {
@@ -67,6 +81,27 @@ fun HistoryScreen(store: JsonFileStore<RideRecord>, modifier: Modifier = Modifie
                 onDelete = { confirmDelete = r },
             )
         }
+    }
+
+    if (confirmReset) {
+        AlertDialog(
+            onDismissRequest = { confirmReset = false },
+            title = { Text("Delete all ${rides.size} rides?") },
+            text = {
+                Text(
+                    "This clears your ride history, totals and the pace targets that come from past rides. " +
+                        "It can't be undone. Your workouts are kept.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    store.update { emptyList() }
+                    expanded = null
+                    confirmReset = false
+                }) { Text("Delete all", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(onClick = { confirmReset = false }) { Text("Cancel") } },
+        )
     }
 
     confirmDelete?.let { r ->
@@ -96,7 +131,7 @@ private fun Totals(rides: List<RideRecord>) {
         ) {
             Total("${rides.size}", "rides")
             Total(formatTime(rides.sumOf { it.durationSec }), "time")
-            Total("%.1f".format(rides.sumOf { it.distanceM } / 1000.0), "km")
+            Total(Units.distanceShort(rides.sumOf { it.distanceM }), Units.DISTANCE)
             Total("${rides.sumOf { it.energyKcal }}", "kcal")
         }
     }
@@ -118,19 +153,29 @@ private fun RideCard(r: RideRecord, expanded: Boolean, onClick: () -> Unit, onDe
             .clickable(onClick = onClick)
             .animateContentSize(),
     ) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(formatDate(r.startEpochMs), style = MaterialTheme.typography.labelLarge)
-            Text(r.workoutName ?: "Free ride", style = MaterialTheme.typography.titleMedium)
-            Text(
-                "${formatTime(r.durationSec)} · ${"%.2f".format(r.distanceM / 1000.0)} km · ${r.energyKcal} kcal",
-                style = MaterialTheme.typography.bodyMedium,
-            )
+        Column(Modifier.padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f).padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(formatDate(r.startEpochMs), style = MaterialTheme.typography.labelLarge)
+                    Text(r.workoutName ?: "Free ride", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "${formatTime(r.durationSec)} · ${Units.distance(r.distanceM)} ${Units.DISTANCE} · ${r.energyKcal} kcal",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+                // Always visible, so a ride can be deleted without expanding it first. Still asks to confirm.
+                IconButton(onClick = onDelete) {
+                    Icon(Icons.Outlined.Delete, contentDescription = "Delete this ride")
+                }
+            }
             if (expanded) {
-                Detail("Moving time", formatTime(r.movingSec))
-                Detail("Power", "avg ${r.avgPowerW ?: "–"} W · max ${r.maxPowerW ?: "–"} W")
-                Detail("Cadence", "avg ${r.avgCadenceRpm ?: "–"} rpm")
-                Detail("Heart rate", "avg ${r.avgHeartRateBpm ?: "–"} · max ${r.maxHeartRateBpm ?: "–"} bpm")
-                TextButton(onClick = onDelete) { Text("Delete ride") }
+                Column(Modifier.padding(end = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Detail("Moving time", formatTime(r.movingSec))
+                    Detail("Speed", "avg ${r.avgSpeedKmh?.let(Units::speed) ?: "–"} ${Units.SPEED}")
+                    Detail("Power", "avg ${r.avgPowerW ?: "–"} W · max ${r.maxPowerW ?: "–"} W")
+                    Detail("Cadence", "avg ${r.avgCadenceRpm ?: "–"} rpm")
+                    Detail("Heart rate", "avg ${r.avgHeartRateBpm ?: "–"} · max ${r.maxHeartRateBpm ?: "–"} bpm")
+                }
             }
         }
     }

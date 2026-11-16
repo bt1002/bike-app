@@ -3,12 +3,13 @@
 # bike-app
 
 An Android app that controls a **Merach S29 Aura** exercise bike over Bluetooth LE. It shows live
-ride stats, runs structured workouts by changing the bike's resistance automatically, and keeps a
-history of your rides.
+ride stats, runs structured workouts by changing the bike's resistance automatically, reads heart rate
+from a Pixel Watch, and keeps a history of your rides with pace targets.
 
-**Status (2026-11-14):** the app builds, its unit tests pass, and it runs on a phone. Connecting, setting
-resistance from the app, and following the bike's own buttons are verified on the bike. Custom workouts,
-ramps and ride history are new and not yet tried on a ride. See
+**Status (2026-11-15):** the app builds, its 92 unit tests pass, and it runs on a phone. Verified on real
+hardware: connecting, setting resistance, following the bike's own buttons, Pixel Watch 2 heart rate, and
+importing workouts from the web builder. Ramps, pace targets, history numbers and the newest UI have been
+checked in the emulator with a simulated bike, not yet on a ride. See
 [`MerachRide/HANDOFF.md`](MerachRide/HANDOFF.md) for details.
 
 ## Why
@@ -19,15 +20,21 @@ publishes no protocol documentation. Probing the bike showed that it speaks the 
 
 ## Features
 
-- Connect to the bike, with automatic reconnect and a foreground notification so rides continue with the screen off.
-- Live power, cadence, level, speed, heart rate, calories, distance and time on one screen.
+- One button connects the bike and your watch, with automatic reconnect, **Bike / Watch** status lights,
+  and a foreground notification so rides continue with the screen off.
+- Live power, cadence, level, speed (mph), heart rate, calories, distance and time on one screen.
 - Set the level from the app or the bike's buttons; the app keeps them in sync.
 - Built-in workouts, plus your own: segments that hold a level or **ramp** smoothly between levels.
+  During a workout, **− / +** makes the rest of it easier or harder.
+- Heart rate from a **Pixel Watch** (Connected Fitness) or any standard Bluetooth heart rate strap.
+- A **pace target** from your last 5 rides of the same workout, with green ▲ / red ▼ arrows.
+- A **simulated bike** in debug builds, for testing in the emulator without the real bike.
 - A **web workout builder** ([`tools/workout-builder.html`](tools/workout-builder.html)) for making workouts
   on a computer. Open it in a browser, export `workouts.json`, and use **Import** on the app's Workouts tab.
-- Ride history with per-ride stats (time, distance, kcal, power, cadence, heart rate) and totals.
-- Heart rate from a Pixel Watch, either through Connected Fitness or the companion **watch app**
-  (`MerachRide/wear/`, not yet tested), which starts on the watch when the bike connects.
+- Ride history with per-ride stats (time, distance, kcal, speed, power, cadence, heart rate) and totals.
+- A companion **watch app** (`MerachRide/wear/`, not yet built or tested) as a second way to get heart rate
+  from a Pixel Watch; it starts on the watch when the bike connects.
+- A **Report issue** button (in the connection log) that opens a pre-filled GitHub issue with the log.
 
 ## What's verified
 

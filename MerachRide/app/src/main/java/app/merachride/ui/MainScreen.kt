@@ -51,6 +51,7 @@ fun MainScreen(app: MerachRideApp) {
                 tracker = app.rideTracker,
                 heartRate = app.heartRate,
                 watchLink = app.watchLink,
+                history = app.rideHistory,
                 onChooseWorkout = { tab = Tab.Workouts },
                 modifier = m,
             )

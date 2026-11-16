@@ -2,6 +2,7 @@ package app.merachride.history
 
 import app.merachride.data.MiniJson
 import app.merachride.data.asObject
+import app.merachride.data.doubleOrNull
 import app.merachride.data.int
 import app.merachride.data.intOrNull
 import app.merachride.data.long
@@ -30,6 +31,8 @@ object RideCodec {
                     "avgHr" to r.avgHeartRateBpm,
                     "maxHr" to r.maxHeartRateBpm,
                     "workout" to r.workoutName,
+                    "avgKmh" to r.avgSpeedKmh,
+                    "workoutKey" to r.workoutKey,
                 )
             },
         ),
@@ -52,6 +55,8 @@ object RideCodec {
                     avgHeartRateBpm = r.intOrNull("avgHr"),
                     maxHeartRateBpm = r.intOrNull("maxHr"),
                     workoutName = r.strOrNull("workout"),
+                    avgSpeedKmh = r.doubleOrNull("avgKmh"),
+                    workoutKey = r.strOrNull("workoutKey"),
                 )
             }.getOrNull()
         }

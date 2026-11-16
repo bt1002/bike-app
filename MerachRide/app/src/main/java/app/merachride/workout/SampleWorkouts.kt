@@ -57,5 +57,16 @@ object SampleWorkouts {
         },
     )
 
-    val all: List<Workout> = listOf(quickTest, easySpin, intervals, hillPyramid, steps8to12)
+    /** 30 minutes ramping from level 6 up to 12 over 5 minutes, then back down, three times (user's design). */
+    val stairs = Workout(
+        "Stairs",
+        buildList {
+            repeat(3) {
+                add(Segment(mins(5), 6, "Up", endLevel = 12))
+                add(Segment(mins(5), 12, "Down", endLevel = 6))
+            }
+        },
+    )
+
+    val all: List<Workout> = listOf(quickTest, easySpin, intervals, hillPyramid, steps8to12, stairs)
 }

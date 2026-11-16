@@ -8,6 +8,7 @@ import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.os.SystemClock
 import android.util.Log
 import androidx.core.content.ContextCompat
@@ -21,6 +22,8 @@ import app.merachride.protocol.IndoorBikeDataParser
 import app.merachride.protocol.ManualChangeDetector
 import app.merachride.protocol.ResistanceScale
 import app.merachride.service.RideService
+import app.merachride.sim.BikeSimulator
+import app.merachride.sim.TimeScale
 import app.merachride.workout.WorkoutEngine
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -106,6 +109,97 @@ class BikeSession(
 
     /** True when the workout was paused because the link dropped, so it resumes on reconnect. */
     @Volatile private var resumeWorkoutOnReconnect = false
+
+    // ---------------------------------------------------------------- simulator (debug builds)
+
+    /** True in debuggable builds, where the simulated bike is offered. */
+    val simulatorAvailable: Boolean =
+        (app.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+
+    @Volatile private var simulator: BikeSimulator? = null
+    @Volatile private var simDropRequested = false
+
+    private val _simulated = MutableStateFlow(false)
+    /** True while connected (or reconnecting) to the simulated bike instead of a real one. */
+    val simulated: StateFlow<Boolean> = _simulated.asStateFlow()
+
+    /**
+     * Connects to a pretend bike (see [BikeSimulator]). Goes through the same states, data path, level
+     * commands and pause/resume-on-drop as the real bike, without Bluetooth. Debug builds only.
+     */
+    fun connectSimulated() {
+        if (!simulatorAvailable) return
+        stopScan()
+        sessionJob?.cancel()
+        conn.disconnect()
+        val sim = BikeSimulator()
+        simulator = sim
+        _simulated.value = true
+        resistanceScale.reset()
+        lastConnectedAddress = SIM_ADDRESS
+        ContextCompat.startForegroundService(app, Intent(app, RideService::class.java))
+
+        sessionJob = scope.launch {
+            var attempt = 0
+            while (isActive) {
+                attempt++
+                _state.value = ConnState.Connecting(SIM_NAME, attempt)
+                log(if (attempt == 1) "Connecting to $SIM_NAME" else "Reconnect attempt $attempt")
+                delay(800)
+                _data.value = BikeData()
+                manualChange.reset()
+                simDropRequested = false
+                _targetLevel.value?.let {
+                    sim.setLevel(it)
+                    log("Re-applied level $it: SUCCESS")
+                }
+                log("Ready: app has control of the bike (simulated)")
+                _state.value = ConnState.Ready(SIM_NAME)
+                resumeWorkoutIfPausedByDrop()
+                while (isActive && !simDropRequested) {
+                    delay(TimeScale.tickMs)
+                    onBikeData(sim.tick())
+                }
+                log("Connection lost (simulated)")
+                _state.value = ConnState.Connecting(SIM_NAME, 1)
+                pauseWorkoutForDrop()
+                attempt = 1 // The next pass is the first reconnect attempt, as with the real bike.
+                delay(3_000)
+            }
+        }
+    }
+
+    /** Simulator: the rider presses the bike's own + / − button. */
+    fun simPressBikeButton(delta: Int) {
+        simulator?.pressButton(delta)
+    }
+
+    /** Simulator: the rider starts or stops pedalling. */
+    fun simSetPedalling(on: Boolean) {
+        simulator?.pedalling = on
+    }
+
+    /** Simulator: the cadence the pretend rider aims for. */
+    fun simSetCadence(rpm: Double) {
+        simulator?.targetCadence = rpm
+    }
+
+    /** Simulator: drop the link; it comes back after a few seconds, like the real auto-reconnect. */
+    fun simDropConnection() {
+        if (simulator != null) simDropRequested = true
+    }
+
+    /** Simulator: the bike's distance/energy/time counters restart from 0, as after the bike sleeps. */
+    fun simResetCounters() {
+        simulator?.resetCounters()
+        log("Bike counters reset (simulated)")
+    }
+
+    private fun stopSimulator() {
+        simulator = null
+        _simulated.value = false
+        TimeScale.factor = 1
+    }
 
     init {
         scope.launch {
@@ -226,6 +320,7 @@ class BikeSession(
         stopScan()
         prefs.edit().putString(KEY_ADDRESS, address).putString(KEY_NAME, name).apply()
         sessionJob?.cancel()
+        stopSimulator()
         if (address != lastConnectedAddress) resistanceScale.reset() // Another bike may use other units.
         lastConnectedAddress = address
         ContextCompat.startForegroundService(app, Intent(app, RideService::class.java))
@@ -270,6 +365,7 @@ class BikeSession(
     fun disconnect() {
         sessionJob?.cancel()
         sessionJob = null
+        stopSimulator()
         resumeWorkoutOnReconnect = false
         workout.pause()
         conn.disconnect()
@@ -343,6 +439,13 @@ class BikeSession(
         val l = _targetLevel.value ?: return@withLock false
         if (_state.value !is ConnState.Ready) return@withLock false // Applied in setUp() on reconnect.
 
+        simulator?.let { sim ->
+            manualChange.onCommandSent(SystemClock.elapsedRealtime())
+            sim.setLevel(l)
+            log("Level $l")
+            return@withLock true
+        }
+
         var result = sendCommand(FtmsProtocol.setResistanceLevel(l))
         if (result == ResultCode.CONTROL_NOT_PERMITTED) {
             log("Control was lost; requesting it again")
@@ -390,6 +493,8 @@ class BikeSession(
 
     private companion object {
         const val TAG = "MerachRide"
+        const val SIM_NAME = "Simulated bike"
+        const val SIM_ADDRESS = "simulator"
         const val KEY_ADDRESS = "address"
         const val KEY_NAME = "name"
         const val SCAN_DURATION_MS = 15_000L

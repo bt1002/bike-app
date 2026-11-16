@@ -1,6 +1,7 @@
 package app.merachride.workout
 
 import app.merachride.protocol.BikeController
+import app.merachride.sim.TimeScale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -51,7 +52,7 @@ class WorkoutEngine(
 
         ticker = scope.launch(Dispatchers.Main) {
             while (isActive) {
-                delay(1_000)
+                delay(TimeScale.tickMs) // 1 s, unless the simulator speeds time up.
                 val before = _state.value
                 val w = before.workout ?: break
                 val t = before.elapsedSec + 1
@@ -109,9 +110,28 @@ class WorkoutEngine(
         if (s.running) applyLevel(w.levelAt(s.elapsedSec))
     }
 
+    /**
+     * The workout card's −/+: makes the rest of the workout [delta] levels harder (+1) or easier (−1).
+     * Unlike [followRiderLevel], also works while paused (applied on resume). Levels stay within 1..16
+     * however far the offset goes.
+     */
+    fun bumpLevels(delta: Int) {
+        val s = _state.value
+        val w = s.workout ?: return
+        if (s.finished) return
+        val offset = (s.levelOffset + delta).coerceIn(-MAX_OFFSET, MAX_OFFSET)
+        _state.value = s.copy(levelOffset = offset)
+        if (s.running) applyLevel(w.adjustedLevelAt(s.elapsedSec, offset))
+    }
+
     private fun stopTicker() {
         ticker?.cancel()
         ticker = null
+    }
+
+    private companion object {
+        /** Enough to take any level to either end of the 1..16 range. */
+        const val MAX_OFFSET = 15
     }
 
     private fun applyLevel(level: Int) {

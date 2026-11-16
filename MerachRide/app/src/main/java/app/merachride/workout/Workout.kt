@@ -50,6 +50,9 @@ data class Workout(val name: String, val segments: List<Segment>, val id: String
 
     val totalSec: Int = segments.sumOf { it.durationSec }
 
+    /** Identifies this workout across rides: the id for custom workouts, the name for built-in ones (blank id). */
+    val key: String get() = id.ifBlank { "builtin:$name" }
+
     /** Index of the segment active at [elapsedSec]. Past the end, returns the last segment. */
     fun segmentIndexAt(elapsedSec: Int): Int {
         var end = 0
@@ -70,8 +73,8 @@ data class Workout(val name: String, val segments: List<Segment>, val id: String
     }
 
     /**
-     * [levelAt] shifted by the rider's [offset] (set when they change the level mid-workout), kept
-     * within the bike's 1–16. e.g. offset +2 turns an 8 → 12 ramp into 10 → 14.
+     * [levelAt] shifted by the rider's [offset] (set by changing the level mid-workout, or by the workout
+     * card's −/+), kept within the bike's 1–16. e.g. offset +2 turns an 8 → 12 ramp into 10 → 14.
      */
     fun adjustedLevelAt(elapsedSec: Int, offset: Int): Int = clampLevel(levelAt(elapsedSec) + offset)
 
@@ -86,8 +89,9 @@ data class WorkoutState(
     val running: Boolean = false,
     val finished: Boolean = false,
     /**
-     * Levels the rider added (+) or took off (−) mid-workout with the app's −/+ or the bike's buttons.
-     * Applies to the rest of the workout; reset by Reset, loading a workout, or restarting it.
+     * Levels the rider added (+) or took off (−) for the rest of the workout: by changing the level
+     * mid-workout (the app's −/+ or the bike's buttons) or with the workout card's −/+.
+     * Reset by tapping the offset, loading a workout, or restarting it.
      */
     val levelOffset: Int = 0,
 ) {
