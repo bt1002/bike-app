@@ -14,6 +14,7 @@ import androidx.core.app.ServiceCompat
 import app.merachride.ConnState
 import app.merachride.MainActivity
 import app.merachride.MerachRideApp
+import app.merachride.R
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -85,7 +86,7 @@ class RideService : Service() {
             PendingIntent.FLAG_IMMUTABLE,
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
+            .setSmallIcon(R.drawable.ic_stat_merachride)
             .setContentTitle("Merach Ride")
             .setContentText(text)
             .setContentIntent(open)
