@@ -43,7 +43,9 @@ so you don't need Connected Fitness. The phone opens it automatically when the b
 1. Fully close the Merach app (the bike accepts one controller at a time).
 2. Grant the *Nearby devices* permission when asked.
 3. **Ride** tab → **Scan for bikes** → tap `MRK-S29C-307F`. Next time, use the **Connect to …** button.
-4. Set the level with − / +, or with the bike's own buttons (the app follows them).
+4. Set the level with − / +, or with the bike's own buttons (the app follows them). During a workout,
+   either one shifts the rest of the workout by the same number of levels (ramps too); the workout card
+   shows e.g. "Levels +2 for the rest of the workout" with a **Reset** button.
 5. **Workouts** tab: tap a workout to load it, then press **Start** on the Ride tab.
    - **New** creates your own workout; **Copy** turns a built-in one into an editable copy.
    - Each segment has a time, a level, and optionally a **ramp** to another level, which the app steps

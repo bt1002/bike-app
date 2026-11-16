@@ -50,7 +50,8 @@ Read `MerachRide/HANDOFF.md` first. It has the current status, the discovery log
   Message format in `protocol/WatchProtocol.kt`, copied in `wear/.../WatchProtocol.kt` (keep in sync). Both
   apps share applicationId `app.merachride`. Unverified: not yet built.
 - `workout/`: model (segments hold a level or ramp via `endLevel`), engine (1 s ticker on the Main dispatcher;
-  sends a level whenever `Workout.levelAt` changes), built-in workouts, editor draft (`WorkoutDraft`),
+  sends a level whenever `Workout.adjustedLevelAt` changes; `WorkoutState.levelOffset` is the rider's mid-workout
+  change from the app's −/+ or the bike's buttons, applied to the rest of the workout), built-in workouts, editor draft (`WorkoutDraft`),
   `WorkoutCodec` (`workouts.json`) and `WorkoutImport` (merge an imported file by id).
 - `history/`: `RideRecorder` (pure: ride stats from 1 Hz samples, handles bike counter restarts),
   `RideTracker` (ride start/finish/save, Main thread) and `RideCodec` (`rides.json`).

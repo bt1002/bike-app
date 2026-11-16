@@ -1,5 +1,7 @@
 package app.merachride.workout
 
+import app.merachride.protocol.FtmsProtocol
+
 /**
  * One block of a workout. Holds [level] for [durationSec], or, if [endLevel] is set, ramps
  * steadily from [level] at the start to [endLevel] at the end.
@@ -28,7 +30,17 @@ data class Segment(
 
     /** "8" or "8→12". */
     val levelText: String get() = if (isRamp) "$level→$endLevel" else "$level"
+
+    /** Like [levelText], with the rider's [offset] added (see [Workout.adjustedLevelAt]). */
+    fun levelText(offset: Int): String {
+        if (offset == 0) return levelText
+        val start = clampLevel(level + offset)
+        val end = endLevel?.let { clampLevel(it + offset) }
+        return if (end != null && end != start) "$start→$end" else "$start"
+    }
 }
+
+internal fun clampLevel(level: Int): Int = level.coerceIn(FtmsProtocol.MIN_LEVEL, FtmsProtocol.MAX_LEVEL)
 
 /** [id] is blank for built-in workouts and a UUID for ones the user made. */
 data class Workout(val name: String, val segments: List<Segment>, val id: String = "") {
@@ -56,6 +68,15 @@ data class Workout(val name: String, val segments: List<Segment>, val id: String
         val i = segmentIndexAt(elapsedSec)
         return segments[i].levelAt(elapsedSec - segmentStart(i))
     }
+
+    /**
+     * [levelAt] shifted by the rider's [offset] (set when they change the level mid-workout), kept
+     * within the bike's 1–16. e.g. offset +2 turns an 8 → 12 ramp into 10 → 14.
+     */
+    fun adjustedLevelAt(elapsedSec: Int, offset: Int): Int = clampLevel(levelAt(elapsedSec) + offset)
+
+    /** The offset that makes [adjustedLevelAt] equal [level] at [elapsedSec]. */
+    fun offsetFor(level: Int, elapsedSec: Int): Int = clampLevel(level) - levelAt(elapsedSec)
 }
 
 /** Snapshot of a workout in progress. */
@@ -64,6 +85,11 @@ data class WorkoutState(
     val elapsedSec: Int = 0,
     val running: Boolean = false,
     val finished: Boolean = false,
+    /**
+     * Levels the rider added (+) or took off (−) mid-workout with the app's −/+ or the bike's buttons.
+     * Applies to the rest of the workout; reset by Reset, loading a workout, or restarting it.
+     */
+    val levelOffset: Int = 0,
 ) {
     val segmentIndex: Int
         get() = workout?.segmentIndexAt(elapsedSec) ?: 0

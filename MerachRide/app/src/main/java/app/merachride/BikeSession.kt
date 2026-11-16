@@ -138,9 +138,15 @@ class BikeSession(
         }
         manualChange.onReported(now.resistanceLevel, _targetLevel.value, SystemClock.elapsedRealtime())?.let { level ->
             // The rider changed the level on the bike. Follow it rather than fight it; a running
-            // workout sets its own level again at the next segment.
+            // workout shifts its remaining levels to match, as with the app's −/+.
             _targetLevel.value = level
             log("Level changed on the bike: $level")
+            scope.launch(Dispatchers.Main) {
+                val before = workout.state.value.levelOffset
+                workout.followRiderLevel(level)
+                val after = workout.state.value.levelOffset
+                if (after != before) log("Workout levels %+d for the rest of the workout".format(after))
+            }
         }
     }
 
@@ -324,6 +330,8 @@ class BikeSession(
             val base = current ?: _data.value.resistanceLevel ?: FtmsProtocol.MIN_LEVEL
             (base + delta).coerceIn(FtmsProtocol.MIN_LEVEL, FtmsProtocol.MAX_LEVEL)
         }
+        // A running workout keeps the change for the rest of the workout. (Called on the main thread.)
+        _targetLevel.value?.let(workout::followRiderLevel)
         scope.launch { sendTargetLevel() }
     }
 

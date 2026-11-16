@@ -47,7 +47,7 @@ class WorkoutEngine(
         val s = if (current.finished) WorkoutState(workout = workout) else current
         _state.value = s.copy(running = true)
         lastSent = null // Always send on start/resume, in case the level changed while paused.
-        applyLevel(workout.levelAt(s.elapsedSec))
+        applyLevel(workout.adjustedLevelAt(s.elapsedSec, s.levelOffset))
 
         ticker = scope.launch(Dispatchers.Main) {
             while (isActive) {
@@ -60,7 +60,7 @@ class WorkoutEngine(
                     break
                 }
                 _state.value = before.copy(elapsedSec = t)
-                applyLevel(w.levelAt(t))
+                applyLevel(w.adjustedLevelAt(t, before.levelOffset))
             }
         }
     }
@@ -81,8 +81,32 @@ class WorkoutEngine(
             _state.value = s.copy(elapsedSec = w.totalSec, running = false, finished = true)
         } else {
             _state.value = s.copy(elapsedSec = w.segmentStart(next))
-            if (s.running) applyLevel(w.levelAt(w.segmentStart(next)))
+            if (s.running) applyLevel(w.adjustedLevelAt(w.segmentStart(next), s.levelOffset))
         }
+    }
+
+    /**
+     * The rider set [level] (the app's −/+ or the bike's own buttons) while the workout runs. Keeps the
+     * change for the rest of the workout: every later level is shifted by the same amount, instead of the
+     * workout putting its own level back at the next segment or ramp step. Ignored while paused.
+     * UNVERIFIED on the bike.
+     */
+    fun followRiderLevel(level: Int) {
+        val s = _state.value
+        val w = s.workout ?: return
+        if (!s.running) return
+        val offset = w.offsetFor(level, s.elapsedSec)
+        lastSent = w.adjustedLevelAt(s.elapsedSec, offset) // The bike is already at (or being sent) this level.
+        if (offset != s.levelOffset) _state.value = s.copy(levelOffset = offset)
+    }
+
+    /** Back to the workout's own levels. */
+    fun resetLevelOffset() {
+        val s = _state.value
+        if (s.levelOffset == 0) return
+        _state.value = s.copy(levelOffset = 0)
+        val w = s.workout ?: return
+        if (s.running) applyLevel(w.levelAt(s.elapsedSec))
     }
 
     private fun stopTicker() {

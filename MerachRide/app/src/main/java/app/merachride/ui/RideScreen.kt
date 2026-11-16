@@ -477,17 +477,30 @@ private fun ActiveWorkout(ws: WorkoutState, w: Workout, engine: WorkoutEngine) {
             Text("${formatTime(ws.totalRemainingSec)} left", style = MaterialTheme.typography.bodyMedium)
         }
 
+        if (ws.levelOffset != 0 && !ws.finished) {
+            // Set with the app's −/+ or the bike's buttons during the workout.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Levels %+d for the rest of the workout".format(ws.levelOffset),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = engine::resetLevelOffset) { Text("Reset") }
+            }
+        }
+
         val seg = ws.currentSegment
         if (ws.finished) {
             Text("Workout complete. Nice work!", style = MaterialTheme.typography.titleLarge)
         } else if (seg != null) {
             Text(
-                "${ws.segmentIndex + 1}/${w.segments.size} · ${seg.label.ifBlank { "Segment" }} · level ${seg.levelText}",
+                "${ws.segmentIndex + 1}/${w.segments.size} · ${seg.label.ifBlank { "Segment" }} · level ${seg.levelText(ws.levelOffset)}",
                 style = MaterialTheme.typography.titleSmall,
             )
             Text(formatTime(ws.segmentRemainingSec), fontSize = 44.sp, fontWeight = FontWeight.Bold, lineHeight = 48.sp)
             Text(
-                ws.nextSegment?.let { "Next: ${it.label.ifBlank { "Segment" }} · level ${it.levelText} · ${formatTime(it.durationSec)}" }
+                ws.nextSegment?.let { "Next: ${it.label.ifBlank { "Segment" }} · level ${it.levelText(ws.levelOffset)} · ${formatTime(it.durationSec)}" }
                     ?: "Last segment",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
