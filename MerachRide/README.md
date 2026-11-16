@@ -5,8 +5,8 @@ using the standard FTMS protocol. It shows live stats, runs structured workouts 
 resistance (levels 1–16) automatically, reads heart rate from a Pixel Watch, and keeps a history of
 your rides with pace targets.
 
-**Status (2026-11-16, branch `watch-heart-rate`):** the phone app builds in Android Studio and 106 unit
-tests pass; the watch app (`wear/`) doesn't compile yet (missing Guava; see HANDOFF). Verified on
+**Status (2026-11-16, branch `watch-heart-rate`):** the phone app and the watch app (`wear/`) both build
+in Android Studio, and 106 unit tests pass. The watch app hasn't been tried on the watch yet. Verified on
 real hardware: connecting and setting levels, following the bike's own buttons, Pixel Watch 2 heart rate,
 and importing workouts from the web builder. The rest (ramps, pace targets, history numbers, status
 lights, level offset) has been checked in the emulator with the simulated bike but not yet on a ride.
@@ -76,7 +76,7 @@ so you don't need Connected Fitness. The phone opens it automatically when the b
       phone". After that, the app waits for it in the background whenever the bike connects (switch in the
       heart rate sheet), so you only need to tap Connected Fitness on the watch, before or after connecting.
       Chest straps work the same way.
-    - **Watch app** (not yet built; see *Watch app* above): it opens on the watch when the bike connects and
+    - **Watch app** (builds, not yet tried on the watch; see *Watch app* above): it opens on the watch when the bike connects and
       sends heart rate to the phone. Start/stop it from the heart rate sheet or on the watch. It stops on its
       own if the phone goes quiet for 3 minutes, and after 4 hours.
 11. The ⓘ icon at the top of the Ride tab opens the connection log. Check it first if something misbehaves.

@@ -32,7 +32,7 @@ publishes no protocol documentation. Probing the bike showed that it speaks the 
 - A **web workout builder** ([`tools/workout-builder.html`](tools/workout-builder.html)) for making workouts
   on a computer. Open it in a browser, export `workouts.json`, and use **Import** on the app's Workouts tab.
 - Ride history with per-ride stats (time, distance, kcal, speed, power, cadence, heart rate) and totals.
-- A companion **watch app** (`MerachRide/wear/`, not yet built or tested) as a second way to get heart rate
+- A companion **watch app** (`MerachRide/wear/`, builds but not yet tested on the watch) as a second way to get heart rate
   from a Pixel Watch; it starts on the watch when the bike connects.
 - A **Report issue** button (in the connection log) that opens a pre-filled GitHub issue with the log.
 

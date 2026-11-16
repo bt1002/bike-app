@@ -56,7 +56,8 @@ Read `MerachRide/HANDOFF.md` first. It has the current status, the discovery log
 - `WatchLink.kt` + `wear/` module: the MerachRide watch app reads heart rate with Health Services and sends
   it over the Wear OS Data Layer; the phone opens it with `RemoteActivityHelper` when the bike connects.
   Message format in `protocol/WatchProtocol.kt`, copied in `wear/.../WatchProtocol.kt` (keep in sync). Both
-  apps share applicationId `app.merachride`. Unverified: not yet built.
+  apps share applicationId `app.merachride`. Builds (2026-11-16); not yet run on the watch. `wear/` depends on
+  full Guava for `ListenableFuture`: the standalone `listenablefuture:1.0` artifact resolves to an empty jar.
 - `workout/`: model (segments hold a level or ramp via `endLevel`), engine (1 s ticker on the Main dispatcher;
   sends a level whenever `Workout.adjustedLevelAt(t, levelOffset)` changes). `WorkoutState.levelOffset` is the
   rider's change for the rest of the workout, set two ways: `followRiderLevel` (changing the level mid-workout

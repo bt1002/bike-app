@@ -52,5 +52,8 @@ dependencies {
 
     implementation("androidx.health:health-services-client:1.0.0")
     implementation("com.google.android.gms:play-services-wearable:18.1.0")
-    implementation("com.google.guava:listenablefuture:1.0")
+    // Health Services returns Guava ListenableFutures. The standalone listenablefuture:1.0 artifact gets
+    // swapped for Guava's empty "9999.0" placeholder during dependency resolution, leaving the class
+    // missing, so depend on Guava itself.
+    implementation("com.google.guava:guava:33.3.1-android")
 }
