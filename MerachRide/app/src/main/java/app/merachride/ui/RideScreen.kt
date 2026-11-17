@@ -51,10 +51,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -814,8 +814,9 @@ private fun offsetSuffix(offset: Int): String = when {
 }
 
 /**
- * Bar chart of a workout's levels, with completed segments drawn solid and a "now" marker.
- * Segments not yet finished are drawn shifted by [offset] (the rider's +/−), as the bike will get them.
+ * Bar chart of a workout's levels, with levels already ridden drawn solid and a "now" marker. Ramps
+ * show as steps. Levels not yet ridden are drawn shifted by [offset] (the rider's +/−), as the bike
+ * will get them.
  */
 @Composable
 fun WorkoutProfile(w: Workout, progress: Float?, modifier: Modifier = Modifier, offset: Int = 0) {
@@ -823,30 +824,30 @@ fun WorkoutProfile(w: Workout, progress: Float?, modifier: Modifier = Modifier, 
     val marker = MaterialTheme.colorScheme.onSurface
     Canvas(modifier) {
         val total = w.totalSec.toFloat()
-        var x = 0f
+        var segStart = 0
         w.segments.forEach { s ->
-            val segWidth = size.width * s.durationSec / total
-            val done = progress != null && (x + segWidth) / size.width <= progress
-            val alpha = when {
-                progress == null -> 0.8f
-                done -> 1f
-                else -> 0.35f
+            // A 1 px gap at the end of each segment keeps segments apart.
+            val segRight = size.width * (segStart + s.durationSec) / total - 1f
+            // Ramps are drawn as the steps the bike actually rides, not as a slope (issue #1).
+            s.levelRuns().forEach { r ->
+                val left = size.width * (segStart + r.startSec) / total
+                val right = (size.width * (segStart + r.endSec) / total).coerceAtMost(segRight).coerceAtLeast(left + 1f)
+                val done = progress != null && (segStart + r.endSec) / total <= progress
+                val alpha = when {
+                    progress == null -> 0.8f
+                    done -> 1f
+                    else -> 0.35f
+                }
+                val shift = if (done) 0 else offset
+                val level = (r.level + shift).coerceIn(FtmsProtocol.MIN_LEVEL, FtmsProtocol.MAX_LEVEL)
+                val h = size.height * level / FtmsProtocol.MAX_LEVEL
+                drawRect(
+                    color = bar.copy(alpha = alpha),
+                    topLeft = Offset(left, size.height - h),
+                    size = Size(right - left, h),
+                )
             }
-            val shift = if (done) 0 else offset
-            fun h(level: Int) = size.height * (level + shift).coerceIn(FtmsProtocol.MIN_LEVEL, FtmsProtocol.MAX_LEVEL) / FtmsProtocol.MAX_LEVEL
-            val hStart = h(s.level)
-            val hEnd = h(s.endLevel ?: s.level)
-            val right = x + (segWidth - 1f).coerceAtLeast(1f)
-            // A held level is a rectangle; a ramp is a sloped top.
-            val shape = Path().apply {
-                moveTo(x, size.height)
-                lineTo(x, size.height - hStart)
-                lineTo(right, size.height - hEnd)
-                lineTo(right, size.height)
-                close()
-            }
-            drawPath(shape, color = bar.copy(alpha = alpha))
-            x += segWidth
+            segStart += s.durationSec
         }
         if (progress != null) {
             val px = size.width * progress

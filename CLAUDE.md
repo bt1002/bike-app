@@ -38,7 +38,8 @@ Read `MerachRide/HANDOFF.md` first. It has the current status, the discovery log
   **Never write to `02f00000-…-fe00`**, which is probably firmware update (OTA).
 - Indoor Bike Data (`0x2AD2`) reports resistance in **whole levels** (level 14 = raw `14`), verified on the
   bike 2026-11-14. It also reports changes made with the bike's own buttons, which the app follows via
-  `protocol/ManualChangeDetector`. `protocol/ResistanceScale` still auto-detects the unit as a safeguard.
+  `protocol/ManualChangeDetector`. A level sent while the rider has stopped pedalling can be undone by the bike
+  when they resume (seen 2026-11-16, issue #1); `ManualChangeDetector.shouldResend` makes the app send it again. `protocol/ResistanceScale` still auto-detects the unit as a safeguard.
 
 ## Code layout (`MerachRide/app/src/main/java/app/merachride/`)
 

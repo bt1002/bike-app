@@ -28,6 +28,27 @@ data class Segment(
         return level + Math.round((end - level) * t.toDouble() / durationSec).toInt()
     }
 
+    /**
+     * The stretches of this segment spent at one level, in order, as the bike actually gets them: one
+     * run for a held level, a staircase for a ramp (e.g. 8 → 12 over 300 s is 8 for 38 s, then 9, 10, 11
+     * for 75 s each, then 12 for 37 s). Same grouping as the web builder's chart.
+     */
+    fun levelRuns(): List<LevelRun> {
+        if (!isRamp) return listOf(LevelRun(0, durationSec, level))
+        val runs = mutableListOf<LevelRun>()
+        var start = 0
+        var current = levelAt(0)
+        for (t in 1..durationSec) {
+            val l = if (t < durationSec) levelAt(t) else null
+            if (l != current) {
+                runs += LevelRun(start, t, current)
+                start = t
+                if (l != null) current = l
+            }
+        }
+        return runs
+    }
+
     /** "8" or "8→12". */
     val levelText: String get() = if (isRamp) "$level→$endLevel" else "$level"
 
@@ -39,6 +60,9 @@ data class Segment(
         return if (end != null && end != start) "$start→$end" else "$start"
     }
 }
+
+/** [level] from [startSec] (inclusive) to [endSec] (exclusive), in seconds from the segment's start. */
+data class LevelRun(val startSec: Int, val endSec: Int, val level: Int)
 
 internal fun clampLevel(level: Int): Int = level.coerceIn(FtmsProtocol.MIN_LEVEL, FtmsProtocol.MAX_LEVEL)
 

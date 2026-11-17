@@ -242,6 +242,11 @@ class BikeSession(
                 if (after != before) log("Workout levels %+d for the rest of the workout".format(after))
             }
         }
+        if (manualChange.shouldResend(_targetLevel.value, SystemClock.elapsedRealtime())) {
+            // The bike didn't keep the last level sent (e.g. it restored its old level on resuming).
+            log("Bike is at ${now.resistanceLevel}, not ${_targetLevel.value}; sending the level again")
+            scope.launch { sendTargetLevel() }
+        }
     }
 
     private fun onControlPointResponse(bytes: ByteArray) {
