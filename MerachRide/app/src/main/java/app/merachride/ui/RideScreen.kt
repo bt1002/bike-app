@@ -450,14 +450,20 @@ private fun LiveStats(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        // Power and speed stacked on the left, the pace panel beside them on the right, same height.
+        // Speed and heart rate stacked on the left, the pace panel beside them on the right, same height.
         Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                BigMetric("Power", data.powerW?.toString(), "W", Modifier.fillMaxWidth().weight(1f), valueSize = 40.sp)
                 BigMetric(
                     "Speed",
                     data.speedKmh?.let(Units::speed),
                     Units.SPEED,
+                    Modifier.fillMaxWidth().weight(1f),
+                    valueSize = 40.sp,
+                )
+                BigMetric(
+                    "Heart rate",
+                    data.heartRateBpm?.takeIf { it > 0 }?.toString(),
+                    "bpm",
                     Modifier.fillMaxWidth().weight(1f),
                     valueSize = 40.sp,
                 )
@@ -467,7 +473,7 @@ private fun LiveStats(
         LevelControl(target, levelEnabled, onChangeLevel)
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             SmallMetric("rpm", data.cadenceRpm?.roundToInt()?.toString(), Modifier.weight(1f))
-            SmallMetric("bpm", data.heartRateBpm?.takeIf { it > 0 }?.toString(), Modifier.weight(1f))
+            SmallMetric("W", data.powerW?.toString(), Modifier.weight(1f))
             SmallMetric("kcal", data.totalEnergyKcal?.toString(), Modifier.weight(1f))
             SmallMetric(Units.DISTANCE, data.totalDistanceM?.let(Units::distance), Modifier.weight(1f))
             SmallMetric("time", data.elapsedTimeS?.let(::formatTime), Modifier.weight(1f))
