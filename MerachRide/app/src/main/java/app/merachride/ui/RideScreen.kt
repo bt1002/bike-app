@@ -453,23 +453,26 @@ private fun LiveStats(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        // Power, speed and heart rate across the top. Three fit only with the unit in the label.
+        // Power, speed and heart rate across the top. Three fit only with the unit in the label, and
+        // "14.1 ▼" in a third of a phone's width needs the values at 34 sp (checked in a 412 dp render).
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            BigMetric("Power", data.powerW?.toString(), "W", Modifier.weight(1f), unitInLabel = true)
+            BigMetric("Power", data.powerW?.toString(), "W", Modifier.weight(1f), valueSize = TOP_VALUE_SIZE, unitInLabel = true)
             BigMetric(
                 "Speed",
                 data.speedKmh?.let(Units::speed),
                 Units.SPEED,
                 Modifier.weight(1f),
+                valueSize = TOP_VALUE_SIZE,
                 unitInLabel = true,
                 // This ride's average speed against the target, as in the pace panel.
-                trailing = speedTrend?.let { t -> { TrendArrow(t, coloured = true, style = MaterialTheme.typography.headlineSmall) } },
+                trailing = speedTrend?.let { t -> { TrendArrow(t, coloured = true, style = MaterialTheme.typography.titleLarge) } },
             )
             BigMetric(
                 "Heart rate",
                 data.heartRateBpm?.takeIf { it > 0 }?.toString(),
                 "bpm",
                 Modifier.weight(1f),
+                valueSize = TOP_VALUE_SIZE,
                 unitInLabel = true,
             )
         }
@@ -505,7 +508,7 @@ private fun BigMetric(
             Row(verticalAlignment = Alignment.Bottom) {
                 Text(value ?: "–", fontSize = valueSize, fontWeight = FontWeight.Bold, lineHeight = valueSize * 1.08f)
                 if (value != null && trailing != null) {
-                    Box(Modifier.padding(bottom = 6.dp)) { trailing() }
+                    Box(Modifier.padding(bottom = 4.dp)) { trailing() }
                 }
                 if (value != null && !unitInLabel) {
                     Text(
@@ -682,6 +685,7 @@ private fun speedTrend(ride: RideProgress?, target: PaceTarget?): PaceTarget.Tre
     if ((ride?.elapsedSec ?: 0) >= PACE_SETTLE_SEC) PaceTarget.trend(ride?.avgSpeedKmh, target?.avgSpeedKmh) else null
 
 private const val PACE_SETTLE_SEC = 30
+private val TOP_VALUE_SIZE = 34.sp
 private val AHEAD_GREEN = Color(0xFF2E7D32)
 
 // ------------------------------------------------------------------ ride
