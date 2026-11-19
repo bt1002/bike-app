@@ -8,6 +8,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -59,6 +60,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -150,6 +152,7 @@ fun RideScreen(
                     target = target,
                     levelEnabled = state is ConnState.Ready,
                     onChangeLevel = session::changeLevel,
+                    pace = { pm -> PacePanel(ride, data.speedKmh, hrBpm ?: data.heartRateBpm, loaded, paceTarget, pm) },
                     modifier = m,
                 )
             }
@@ -161,14 +164,12 @@ fun RideScreen(
                 Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         live(Modifier.fillMaxWidth())
-                        PacePanel(ride, data.speedKmh, hrBpm ?: data.heartRateBpm, loaded, paceTarget)
                         RideBar(ride, onFinish = tracker::finish)
                     }
                     workoutArea(Modifier.weight(1f).fillMaxHeight())
                 }
             } else {
                 live(Modifier.fillMaxWidth())
-                PacePanel(ride, data.speedKmh, hrBpm ?: data.heartRateBpm, loaded, paceTarget)
                 RideBar(ride, onFinish = tracker::finish)
                 workoutArea(Modifier.fillMaxWidth().weight(1f))
             }
@@ -445,16 +446,27 @@ private fun LiveStats(
     target: Int?,
     levelEnabled: Boolean,
     onChangeLevel: (Int) -> Unit,
+    pace: @Composable (Modifier) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            BigMetric("Power", data.powerW?.toString(), "W", Modifier.weight(1f))
-            BigMetric("Cadence", data.cadenceRpm?.roundToInt()?.toString(), "rpm", Modifier.weight(1f))
+        // Power and speed stacked on the left, the pace panel beside them on the right, same height.
+        Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                BigMetric("Power", data.powerW?.toString(), "W", Modifier.fillMaxWidth().weight(1f), valueSize = 40.sp)
+                BigMetric(
+                    "Speed",
+                    data.speedKmh?.let(Units::speed),
+                    Units.SPEED,
+                    Modifier.fillMaxWidth().weight(1f),
+                    valueSize = 40.sp,
+                )
+            }
+            pace(Modifier.weight(1.25f).fillMaxHeight())
         }
         LevelControl(target, levelEnabled, onChangeLevel)
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            SmallMetric(Units.SPEED, data.speedKmh?.let(Units::speed), Modifier.weight(1f))
+            SmallMetric("rpm", data.cadenceRpm?.roundToInt()?.toString(), Modifier.weight(1f))
             SmallMetric("bpm", data.heartRateBpm?.takeIf { it > 0 }?.toString(), Modifier.weight(1f))
             SmallMetric("kcal", data.totalEnergyKcal?.toString(), Modifier.weight(1f))
             SmallMetric(Units.DISTANCE, data.totalDistanceM?.let(Units::distance), Modifier.weight(1f))
@@ -464,12 +476,18 @@ private fun LiveStats(
 }
 
 @Composable
-private fun BigMetric(label: String, value: String?, unit: String, modifier: Modifier = Modifier) {
+private fun BigMetric(
+    label: String,
+    value: String?,
+    unit: String,
+    modifier: Modifier = Modifier,
+    valueSize: TextUnit = 48.sp,
+) {
     Surface(modifier, shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
             Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(verticalAlignment = Alignment.Bottom) {
-                Text(value ?: "–", fontSize = 48.sp, fontWeight = FontWeight.Bold, lineHeight = 52.sp)
+                Text(value ?: "–", fontSize = valueSize, fontWeight = FontWeight.Bold, lineHeight = valueSize * 1.08f)
                 if (value != null) {
                     Text(
                         " $unit",
@@ -547,14 +565,15 @@ private fun PacePanel(
     hrNow: Int?,
     workout: Workout?,
     target: PaceTarget?,
+    modifier: Modifier = Modifier,
 ) {
     // Wait for a short stretch of riding so the arrow doesn't swing on the first few samples.
     val settled = (ride?.elapsedSec ?: 0) >= PACE_SETTLE_SEC
-    Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+    Surface(modifier, shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
         Column(
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(horizontal = 10.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Row {
