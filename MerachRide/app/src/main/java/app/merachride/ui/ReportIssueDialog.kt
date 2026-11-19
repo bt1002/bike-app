@@ -116,6 +116,7 @@ private fun details(context: Context, session: BikeSession): List<String> {
         "App: ${version ?: "?"}",
         "Phone: ${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})",
         "Bike: $bike, target level ${session.targetLevel.value ?: "?"}",
+        "Last bike data: ${session.secondsSinceBikeData?.let { "$it s ago" } ?: "none since connecting"}",
         "Workout: $workout",
     )
 }

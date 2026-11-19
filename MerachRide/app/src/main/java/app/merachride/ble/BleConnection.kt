@@ -127,10 +127,16 @@ class BleConnection(
     fun disconnect() {
         val g = gatt ?: return
         gatt = null
+        // Either call can throw if Android's Bluetooth service has already dropped this connection.
         try {
             g.disconnect()
-        } finally {
+        } catch (e: Exception) {
+            log("disconnect() threw $e")
+        }
+        try {
             g.close() // close() means no further callbacks, so mark state ourselves.
+        } catch (e: Exception) {
+            log("close() threw $e")
         }
         markDisconnected()
     }
@@ -183,15 +189,24 @@ class BleConnection(
         val g = gatt ?: return@withLock false
         val done = CompletableDeferred<Boolean>()
         pendingOp = done
+        var dead = false
         val started = try {
             start(g)
         } catch (e: Exception) {
             log("$name threw $e")
+            dead = isDeadLink(e)
             false
         }
         if (!started) {
             pendingOp = null
             log("$name could not start")
+            if (dead) {
+                // Android's Bluetooth service has dropped this connection without calling
+                // onConnectionStateChange, so nothing else would notice (issue #2). Drop it ourselves:
+                // connected goes false and the owner's auto-reconnect starts. UNVERIFIED on the phone.
+                log("Bluetooth dropped the connection without saying so; reconnecting")
+                disconnect()
+            }
             return@withLock false
         }
         val ok = withTimeoutOrNull(OP_TIMEOUT_MS) { done.await() } ?: false
@@ -230,3 +245,11 @@ class BleConnection(
         const val OP_TIMEOUT_MS = 5_000L
     }
 }
+
+/**
+ * True if [e] (or anything it wraps) is a DeadObjectException: the app's handle on Android's Bluetooth
+ * service is gone, so this GATT connection can't be used again. Seen as
+ * `RuntimeException: android.os.DeadObjectException` from writeCharacteristic (issue #2, 2026-11-19).
+ */
+internal fun isDeadLink(e: Throwable): Boolean =
+    generateSequence(e) { it.cause }.take(10).any { it is android.os.DeadObjectException }

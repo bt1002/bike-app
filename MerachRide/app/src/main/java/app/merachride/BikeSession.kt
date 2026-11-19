@@ -213,7 +213,15 @@ class BikeSession(
         }
     }
 
+    /** When the last Indoor Bike Data arrived (elapsedRealtime), or 0. For diagnostics. */
+    @Volatile private var lastBikeDataAt = 0L
+
+    /** Seconds since the bike last sent data, or null if it hasn't since connecting. For bug reports. */
+    val secondsSinceBikeData: Long?
+        get() = lastBikeDataAt.takeIf { it > 0 }?.let { (SystemClock.elapsedRealtime() - it) / 1000 }
+
     private fun onBikeData(bytes: ByteArray) {
+        lastBikeDataAt = SystemClock.elapsedRealtime()
         val unitBefore = resistanceScale.unit
         val rawBefore = _data.value.resistanceRaw
         _data.update { prev ->
@@ -340,13 +348,38 @@ class BikeSession(
                     attempt = 0
                     _state.value = ConnState.Ready(name)
                     resumeWorkoutIfPausedByDrop()
+                    lastBikeDataAt = 0L
+                    val quietWatch = launch { watchForSilence() }
                     conn.connected.first { !it } // Suspend until the link drops.
+                    quietWatch.cancel()
                     log("Connection lost")
                     // Leave Ready right away so the UI and setResistanceLevel() don't act on a dead link during the backoff.
                     _state.value = ConnState.Connecting(name, 1)
                     pauseWorkoutForDrop()
                 }
                 delay(1_000L + attempt.coerceAtMost(5) * 2_000L)
+            }
+        }
+    }
+
+    /**
+     * Diagnostic only (issue #2): logs once when no Indoor Bike Data has arrived for [QUIET_LOG_MS] while
+     * connected. It's not yet known whether the bike keeps sending data when nobody is pedalling, so
+     * this doesn't act on it; the log will show whether a silent bike goes with a dead link.
+     */
+    private suspend fun watchForSilence() {
+        val since = SystemClock.elapsedRealtime()
+        var warned = false
+        while (true) {
+            delay(15_000)
+            val last = lastBikeDataAt.takeIf { it > 0 } ?: since
+            val quietMs = SystemClock.elapsedRealtime() - last
+            if (quietMs >= QUIET_LOG_MS && !warned) {
+                warned = true
+                log("No data from the bike for ${quietMs / 1000} s (still marked connected)")
+            } else if (quietMs < QUIET_LOG_MS && warned) {
+                warned = false
+                log("Bike data is coming in again")
             }
         }
     }
@@ -503,6 +536,7 @@ class BikeSession(
         const val KEY_ADDRESS = "address"
         const val KEY_NAME = "name"
         const val SCAN_DURATION_MS = 15_000L
+        const val QUIET_LOG_MS = 60_000L
         const val COMMAND_TIMEOUT_MS = 3_000L
         const val MAX_LOG_LINES = 100
         val TIME_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss")
