@@ -7,6 +7,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -56,6 +57,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -151,6 +153,7 @@ fun RideScreen(
                     target = target,
                     levelEnabled = state is ConnState.Ready,
                     onChangeLevel = session::changeLevel,
+                    speedTrend = speedTrend(ride, paceTarget),
                     modifier = m,
                 )
             }
@@ -446,13 +449,22 @@ private fun LiveStats(
     target: Int?,
     levelEnabled: Boolean,
     onChangeLevel: (Int) -> Unit,
+    speedTrend: PaceTarget.Trend?,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         // Power, speed and heart rate across the top. Three fit only with the unit in the label.
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             BigMetric("Power", data.powerW?.toString(), "W", Modifier.weight(1f), unitInLabel = true)
-            BigMetric("Speed", data.speedKmh?.let(Units::speed), Units.SPEED, Modifier.weight(1f), unitInLabel = true)
+            BigMetric(
+                "Speed",
+                data.speedKmh?.let(Units::speed),
+                Units.SPEED,
+                Modifier.weight(1f),
+                unitInLabel = true,
+                // This ride's average speed against the target, as in the pace panel.
+                trailing = speedTrend?.let { t -> { TrendArrow(t, coloured = true, style = MaterialTheme.typography.headlineSmall) } },
+            )
             BigMetric(
                 "Heart rate",
                 data.heartRateBpm?.takeIf { it > 0 }?.toString(),
@@ -479,6 +491,7 @@ private fun BigMetric(
     modifier: Modifier = Modifier,
     valueSize: TextUnit = 40.sp,
     unitInLabel: Boolean = false,
+    trailing: (@Composable () -> Unit)? = null,
 ) {
     Surface(modifier, shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
         Column(Modifier.padding(horizontal = if (unitInLabel) 10.dp else 16.dp, vertical = 10.dp)) {
@@ -491,6 +504,9 @@ private fun BigMetric(
             )
             Row(verticalAlignment = Alignment.Bottom) {
                 Text(value ?: "–", fontSize = valueSize, fontWeight = FontWeight.Bold, lineHeight = valueSize * 1.08f)
+                if (value != null && trailing != null) {
+                    Box(Modifier.padding(bottom = 6.dp)) { trailing() }
+                }
                 if (value != null && !unitInLabel) {
                     Text(
                         " $unit",
@@ -636,23 +652,34 @@ private fun PaceRow(
         Text(avg ?: "–", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
         Row(Modifier.weight(1.3f), verticalAlignment = Alignment.CenterVertically) {
             Text(target ?: "–", style = MaterialTheme.typography.titleMedium)
-            if (trend != null) {
-                val (symbol, colour, description) = when (trend) {
-                    PaceTarget.Trend.AHEAD -> Triple(" ▲", if (colouredTrend) AHEAD_GREEN else MaterialTheme.colorScheme.onSurfaceVariant, "above target")
-                    PaceTarget.Trend.BEHIND -> Triple(" ▼", if (colouredTrend) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant, "below target")
-                    PaceTarget.Trend.ON_PACE -> Triple(" =", MaterialTheme.colorScheme.onSurfaceVariant, "on target")
-                }
-                Text(
-                    symbol,
-                    color = colour,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.semantics { contentDescription = description },
-                )
-            }
+            if (trend != null) TrendArrow(trend, colouredTrend, MaterialTheme.typography.titleLarge)
         }
     }
 }
+
+/**
+ * ▲ above target, ▼ below, = on target. With [coloured], ▲ is green and ▼ red (for speed); otherwise
+ * both are grey (heart rate, where higher isn't better or worse in itself).
+ */
+@Composable
+private fun TrendArrow(trend: PaceTarget.Trend, coloured: Boolean, style: TextStyle) {
+    val (symbol, colour, description) = when (trend) {
+        PaceTarget.Trend.AHEAD -> Triple(" ▲", if (coloured) AHEAD_GREEN else MaterialTheme.colorScheme.onSurfaceVariant, "above target")
+        PaceTarget.Trend.BEHIND -> Triple(" ▼", if (coloured) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant, "below target")
+        PaceTarget.Trend.ON_PACE -> Triple(" =", MaterialTheme.colorScheme.onSurfaceVariant, "on target")
+    }
+    Text(
+        symbol,
+        color = colour,
+        style = style,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier.semantics { contentDescription = description },
+    )
+}
+
+/** This ride's average speed against the target, once the ride has settled; null before then or with no target. */
+private fun speedTrend(ride: RideProgress?, target: PaceTarget?): PaceTarget.Trend? =
+    if ((ride?.elapsedSec ?: 0) >= PACE_SETTLE_SEC) PaceTarget.trend(ride?.avgSpeedKmh, target?.avgSpeedKmh) else null
 
 private const val PACE_SETTLE_SEC = 30
 private val AHEAD_GREEN = Color(0xFF2E7D32)
