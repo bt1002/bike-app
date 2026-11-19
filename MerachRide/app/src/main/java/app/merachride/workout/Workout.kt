@@ -61,6 +61,9 @@ data class Segment(
     }
 }
 
+/** The bike's next level change: [level], [inSec] seconds from now. */
+data class LevelChange(val inSec: Int, val level: Int)
+
 /** [level] from [startSec] (inclusive) to [endSec] (exclusive), in seconds from the segment's start. */
 data class LevelRun(val startSec: Int, val endSec: Int, val level: Int)
 
@@ -102,6 +105,20 @@ data class Workout(val name: String, val segments: List<Segment>, val id: String
      */
     fun adjustedLevelAt(elapsedSec: Int, offset: Int): Int = clampLevel(levelAt(elapsedSec) + offset)
 
+    /**
+     * When the bike's level next changes after [elapsedSec], with the rider's [offset] applied: the next
+     * ramp step, or the next segment at a different level. Segments that start at the same level don't
+     * count. Null if the level stays the same to the end of the workout.
+     */
+    fun nextLevelChange(elapsedSec: Int, offset: Int): LevelChange? {
+        val now = adjustedLevelAt(elapsedSec, offset)
+        for (t in (elapsedSec + 1) until totalSec) {
+            val level = adjustedLevelAt(t, offset)
+            if (level != now) return LevelChange(inSec = t - elapsedSec, level = level)
+        }
+        return null
+    }
+
     /** The offset that makes [adjustedLevelAt] equal [level] at [elapsedSec]. */
     fun offsetFor(level: Int, elapsedSec: Int): Int = clampLevel(level) - levelAt(elapsedSec)
 }
@@ -134,6 +151,10 @@ data class WorkoutState(
             val end = w.segmentStart(segmentIndex) + w.segments[segmentIndex].durationSec
             return (end - elapsedSec).coerceAtLeast(0)
         }
+
+    /** The next level change (for the workout card's countdown), or null if none before the end. */
+    val nextLevelChange: LevelChange?
+        get() = workout?.takeIf { !finished }?.nextLevelChange(elapsedSec, levelOffset)
 
     val totalRemainingSec: Int
         get() = ((workout?.totalSec ?: 0) - elapsedSec).coerceAtLeast(0)

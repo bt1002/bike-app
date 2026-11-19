@@ -780,9 +780,23 @@ private fun ActiveWorkout(ws: WorkoutState, w: Workout, engine: WorkoutEngine) {
         if (ws.finished) {
             Text("Workout complete. Nice work!", style = MaterialTheme.typography.titleLarge)
         } else if (seg != null) {
-            // Segment countdown on the left, what's now and what's next beside it.
+            // Countdown to the bike's next level change (a ramp step or a new segment) on the left,
+            // what's now and what's next beside it.
+            val change = ws.nextLevelChange
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(formatTime(ws.segmentRemainingSec), fontSize = 40.sp, fontWeight = FontWeight.Bold, lineHeight = 44.sp)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        formatTime(change?.inSec ?: ws.totalRemainingSec),
+                        fontSize = 40.sp,
+                        fontWeight = FontWeight.Bold,
+                        lineHeight = 44.sp,
+                    )
+                    Text(
+                        change?.let { "to level ${it.level}" } ?: "to the end",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
