@@ -8,7 +8,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -152,7 +151,6 @@ fun RideScreen(
                     target = target,
                     levelEnabled = state is ConnState.Ready,
                     onChangeLevel = session::changeLevel,
-                    pace = { pm -> PacePanel(ride, data.speedKmh, hrBpm ?: data.heartRateBpm, loaded, paceTarget, pm) },
                     modifier = m,
                 )
             }
@@ -164,12 +162,14 @@ fun RideScreen(
                 Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         live(Modifier.fillMaxWidth())
+                        PacePanel(ride, data.speedKmh, hrBpm ?: data.heartRateBpm, loaded, paceTarget)
                         RideBar(ride, onFinish = tracker::finish)
                     }
                     workoutArea(Modifier.weight(1f).fillMaxHeight())
                 }
             } else {
                 live(Modifier.fillMaxWidth())
+                PacePanel(ride, data.speedKmh, hrBpm ?: data.heartRateBpm, loaded, paceTarget)
                 RideBar(ride, onFinish = tracker::finish)
                 workoutArea(Modifier.fillMaxWidth().weight(1f))
             }
@@ -446,34 +446,24 @@ private fun LiveStats(
     target: Int?,
     levelEnabled: Boolean,
     onChangeLevel: (Int) -> Unit,
-    pace: @Composable (Modifier) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        // Speed and heart rate stacked on the left, the pace panel beside them on the right, same height.
-        Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                BigMetric(
-                    "Speed",
-                    data.speedKmh?.let(Units::speed),
-                    Units.SPEED,
-                    Modifier.fillMaxWidth().weight(1f),
-                    valueSize = 40.sp,
-                )
-                BigMetric(
-                    "Heart rate",
-                    data.heartRateBpm?.takeIf { it > 0 }?.toString(),
-                    "bpm",
-                    Modifier.fillMaxWidth().weight(1f),
-                    valueSize = 40.sp,
-                )
-            }
-            pace(Modifier.weight(1.25f).fillMaxHeight())
+        // Power, speed and heart rate across the top. Three fit only with the unit in the label.
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            BigMetric("Power", data.powerW?.toString(), "W", Modifier.weight(1f), unitInLabel = true)
+            BigMetric("Speed", data.speedKmh?.let(Units::speed), Units.SPEED, Modifier.weight(1f), unitInLabel = true)
+            BigMetric(
+                "Heart rate",
+                data.heartRateBpm?.takeIf { it > 0 }?.toString(),
+                "bpm",
+                Modifier.weight(1f),
+                unitInLabel = true,
+            )
         }
         LevelControl(target, levelEnabled, onChangeLevel)
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             SmallMetric("rpm", data.cadenceRpm?.roundToInt()?.toString(), Modifier.weight(1f))
-            SmallMetric("W", data.powerW?.toString(), Modifier.weight(1f))
             SmallMetric("kcal", data.totalEnergyKcal?.toString(), Modifier.weight(1f))
             SmallMetric(Units.DISTANCE, data.totalDistanceM?.let(Units::distance), Modifier.weight(1f))
             SmallMetric("time", data.elapsedTimeS?.let(::formatTime), Modifier.weight(1f))
@@ -487,14 +477,21 @@ private fun BigMetric(
     value: String?,
     unit: String,
     modifier: Modifier = Modifier,
-    valueSize: TextUnit = 48.sp,
+    valueSize: TextUnit = 40.sp,
+    unitInLabel: Boolean = false,
 ) {
     Surface(modifier, shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
-        Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
-            Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Column(Modifier.padding(horizontal = if (unitInLabel) 10.dp else 16.dp, vertical = 10.dp)) {
+            Text(
+                if (unitInLabel) "$label · $unit" else label,
+                style = if (unitInLabel) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
             Row(verticalAlignment = Alignment.Bottom) {
                 Text(value ?: "–", fontSize = valueSize, fontWeight = FontWeight.Bold, lineHeight = valueSize * 1.08f)
-                if (value != null) {
+                if (value != null && !unitInLabel) {
                     Text(
                         " $unit",
                         style = MaterialTheme.typography.titleMedium,
